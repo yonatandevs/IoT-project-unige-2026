@@ -6,7 +6,7 @@
 - Technologies
 - Registration on Aualweb
     - title of project:
-    - names of involved students: Yonatan Sisay Teshome, Henri Junior Houphouet, Simon Hanselmann
+    - names of involved students: 
     - estimated submission date: 
     - Technologies that will be used:
         - 
