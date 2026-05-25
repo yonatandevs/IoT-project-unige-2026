@@ -1,13 +1,26 @@
 # Meetings
 
-## 22.06.2026
+## 25.05.2026
+- Description of requirements for each service
+- Data models
+- Technologies
+- Registration on Aualweb
+    - title of project:
+    - names of involved students: Yonatan Sisay Teshome, Henri Junior Houphouet, Simon Hanselmann
+    - estimated submission date: 
+    - Technologies that will be used:
+        - 
+- Next steps and meeting
+    - 26.05.2026 at 3pm in Valetta Puggia in person
+
+## 22.05.2026
 - Introduction
 - When do we want to finish?
     - as soon as possible, latest end of June
 - Which project and what do we want to do concretely?
     - bike
 - What are the work steps?
-    - Data acquisition and simulation -> Henry
+    - Data acquisition and simulation -> Henri
         - End devices (bikes, parking, phones?)
         - Existing data?
         - Simulation https://wokwi.com
