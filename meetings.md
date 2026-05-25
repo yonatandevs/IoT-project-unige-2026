@@ -1,17 +1,30 @@
 # Meetings
 
+## 26.05.2026
+
+
 ## 25.05.2026
 - Description of requirements for each service
+    - where can bikes park?
+        - At stations and outside, there are restrictions
+    - no parking stations!
+    - What happens in the processing step
 - Data models
-- Technologies
 - Registration on Aualweb
-    - title of project:
+    - title of project: Smarter Bicycle Mobility in Genoa
     - names of involved students: 
-    - estimated submission date: 
+    - estimated submission date: 18.06.2026
     - Technologies that will be used:
-        - 
+    - Technologies
+        - NodeRED
+        - Angular/React for Dashboard
+        - wokwi (arduino)
+        - InfluxDB
+        - MQTT for notifications
 - Next steps and meeting
     - 26.05.2026 at 3pm in Valetta Puggia in person
+    - Finalize data models
+    - Requirements processing and visualization
 
 ## 22.05.2026
 - Introduction
