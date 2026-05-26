@@ -29,15 +29,15 @@ The system has six layers. Data flows from the edge devices up through the broke
         └──────────┬──────────────────┘
                    │              │
                    ▼              ▼
-        ┌──────────────┐  ┌───────────────────┐
-        │   STORAGE    │  │     ALERTING      │
-        │   InfluxDB   │  │  Grafana Alerting │
-        └──────┬───────┘  └───────────────────┘
-               │ query
-               ▼
+        ┌──────────────┐  ┌────────────────┐
+        │   STORAGE    │  │ MESASGE BROKER │
+        │   InfluxDB   │  │    Mosquito    │
+        └──────┬───────┘  └──────┬─────────┘
+               │ query           │ query
+               ▼                 ▼
         ┌─────────────────────────────┐
         │       VISUALIZATION         │
-        │           Grafana           │
+        │      Custom Dashboard       │
         │  map · charts · tables      │
         │  data export                │
         └──────────────┬──────────────┘

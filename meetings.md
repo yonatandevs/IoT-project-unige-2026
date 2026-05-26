@@ -7,9 +7,9 @@
     - NodeRED also detects errors and sends alerts to MQTT
     - Dashboard fetches data from InfluxDB to display bikes and rides
     - Dashboard fetches alerts from MQTT and displays them
-- Clarification of data model
+- Clarification of data models
     - [Bike](./models/bike.ts)
-    - [Alerts](./models/alerts.ts)
+    - [Alert](./models/alert.ts)
 - Next steps and meeting
     - Friday 29.05.2026 online
     - What technology will be used for simulation?
