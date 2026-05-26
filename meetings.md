@@ -1,7 +1,18 @@
 # Meetings
 
 ## 26.05.2026
-
+- Clarification of Service interaction
+    - Simulation send bike data to MQTT message broker
+    - NodeRED reads from MQTT and stores data in InfluxDB
+    - NodeRED also detects errors and sends alerts to MQTT
+    - Dashboard fetches data from InfluxDB to display bikes and rides
+    - Dashboard fetches alerts from MQTT and displays them
+- Clarification of data model
+    - [Bike](./models/bike.ts)
+    - [Alerts](./models/alerts.ts)
+- Next steps and meeting
+    - Friday 29.05.2026 online
+    - What technology will be used for simulation?
 
 ## 25.05.2026
 - Description of requirements for each service
@@ -15,7 +26,6 @@
     - names of involved students: 
     - estimated submission date: 18.06.2026
     - Technologies that will be used:
-    - Technologies
         - NodeRED
         - Angular/React for Dashboard
         - wokwi (arduino)

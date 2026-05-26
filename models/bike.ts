@@ -1,5 +1,6 @@
 export interface Bike {
     id: string
+    current_ride: string
     status: "available" | "rented" | "broken"
     locked: boolean
     position: {
@@ -8,6 +9,13 @@ export interface Bike {
     }
     battery: number
     current_speed: number
-    last_seen: Date
-    sensor_status: any
+    imu: {
+        x: number
+        y: number
+        z: number
+        dx: number
+        dy: number
+        dz: number
+    }
+    timestamp: Date
 }
