@@ -143,3 +143,13 @@ vite.config.ts.timestamp-*
 .vite/
 
 .idea/
+
+# Docker persistent data (don't commit database files)
+data-processing/influxdb/
+data-processing/node-red/data/*
+!data-processing/node-red/data/flows.json
+!data-processing/node-red/data/flows_cred.json
+!data-processing/node-red/data/settings.js
+
+# Data processing local env (committed for zero-config dev setup)
+!data-processing/.env

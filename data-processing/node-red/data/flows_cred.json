@@ -1,0 +1,5 @@
+{
+    "influxdb-config": {
+        "token": "dev-token-change-in-production"
+    }
+}
