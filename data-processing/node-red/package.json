@@ -1,0 +1,8 @@
+{
+  "name": "iot-bike-node-red",
+  "description": "Node-RED flows for the smart bike data processing pipeline",
+  "version": "1.0.0",
+  "dependencies": {
+    "node-red-contrib-influxdb": "*"
+  }
+}
