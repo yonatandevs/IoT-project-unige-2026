@@ -1,0 +1,15 @@
+{
+  "name": "bike-simulator-node",
+  "version": "1.0.0",
+  "description": "Smart Bike IoT Simulator — Genoa 2025-26",
+  "main": "simulator.js",
+  "scripts": {
+    "start": "node simulator.js",
+    "bike1": "BIKE_ID=bike-ge-001 node simulator.js",
+    "bike2": "BIKE_ID=bike-ge-002 node simulator.js",
+    "bike3": "BIKE_ID=bike-ge-003 node simulator.js"
+  },
+  "dependencies": {
+    "mqtt": "^5.0.0"
+  }
+}

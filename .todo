@@ -1,0 +1,7 @@
+Add simulated RSSI  in telemetry
+Simulate packet loss (drop some MQTT messages)
+Simulate network latency
+Link RSSI to environment
+
+parking zones
+no-go zones
