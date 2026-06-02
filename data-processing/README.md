@@ -7,28 +7,26 @@ MQTT broker + Node-RED processing + InfluxDB storage for the Smart Bike IoT syst
 ```
 data-processing/
 ├── docker-compose.yml          # All 3 services in one stack
-├── .env.example                # Copy to .env and adjust
+├── .env                        # InfluxDB credentials (dev defaults)
+├── .env.example                # Reference template
 ├── mosquitto/
 │   └── config/mosquitto.conf   # Broker config (anonymous, port 1883)
 └── node-red/
     ├── Dockerfile              # Custom image with InfluxDB node
     ├── package.json            # Node-RED dependencies
     └── data/
-        └── flows.json          # 4 processing flows (version-controlled)
+        ├── flows.json          # 4 processing flows (version-controlled)
+        ├── flows_cred.json     # InfluxDB token (version-controlled)
+        └── settings.js         # Node-RED config
 ```
 
 ## Quick Start
 
 ```bash
-# 1. Copy environment file
-cp .env.example .env
-
-# 2. Start everything
-docker compose up -d
-
-# 3. Open the UIs
-#    Node-RED editor:  http://localhost:1880
-#    InfluxDB UI:      http://localhost:8086
+cd data-processing
+docker compose up -d --build
+# Node-RED editor:  http://localhost:1880
+# InfluxDB UI:      http://localhost:8086  (admin / admin12345)
 ```
 
 ## Services
@@ -46,22 +44,21 @@ in the browser at http://localhost:1880.
 
 | Flow | Name                     | Subscribes to       | What it does                                            |
 |------|--------------------------|----------------------|---------------------------------------------------------|
-| A    | Ingest & Store           | `bike/+/gps`, `bike/+/imu`, `bike/+/status`, `station/+/status` | Parses sensor data and writes to InfluxDB |
-| B    | Fall Detection           | `bike/+/imu`        | Triggers alert when `|accel_z| > 25 m/s²`              |
+| A    | Ingest & Store           | `bike/+/gps`, `bike/+/imu`, `bike/+/status`, `station/+/status` | Writes to `bike` and `station` measurements |
+| B    | Fall Detection           | `bike/+/imu`        | Triggers alert when `|z| > 25 m/s²`                    |
 | C    | Parking Violation        | `bike/+/gps`        | Triggers alert when bike is stationary outside a zone   |
 | D    | Battery & Dock Events    | `bike/+/status`, `station/+/event` | Low battery alert (< 15%), dock event placeholder |
 
 ## InfluxDB Measurements
 
 All data is stored in the `bike_data` bucket under org `iot-bikes`.
+Schema matches [models/bike.ts](../models/bike.ts) and [models/alert.ts](../models/alert.ts).
 
-| Measurement      | Tags              | Fields                                                    |
-|------------------|-------------------|-----------------------------------------------------------|
-| `gps`            | `bike_id`         | `lat`, `lng`, `speed`, `heading`, `altitude`              |
-| `imu`            | `bike_id`         | `accel_x`, `accel_y`, `accel_z`, `gyro_x`, `gyro_y`, `gyro_z` |
-| `bike_status`    | `bike_id`         | `battery_level`, `lock_state`, `alarm_active`             |
-| `station_status` | `station_id`      | `available_slots`, `bikes_docked`                         |
-| `alerts`         | `bike_id`, `type`, `severity` | `message`, `acknowledged`                     |
+| Measurement | Tags              | Fields                                                    |
+|-------------|-------------------|-----------------------------------------------------------|
+| `bike`      | `id`              | `lat`, `lng`, `current_speed`, `imu_x`, `imu_y`, `imu_z`, `imu_dx`, `imu_dy`, `imu_dz`, `battery`, `locked`, `status`, `current_ride` |
+| `alert`     | `bike_id`, `type`, `severity` | `alert_id`, `message`, `acknowledged`         |
+| `station`   | `station_id`      | `available_slots`, `bikes_docked`                         |
 
 ## Useful Commands
 
@@ -79,8 +76,7 @@ docker compose down
 docker compose down -v
 ```
 
-## Status
+## More Info
 
-The flows expect MQTT messages on separate topics (`bike/{id}/gps`, etc.)
-as defined in the project proposal. See `INTEGRATION.md` in the project root for the exact
-topic structure, payload formats, and testing instructions.
+See [INTEGRATION.md](../INTEGRATION.md) in the project root for the exact
+MQTT topic structure, payload formats, Flux queries, and testing instructions.

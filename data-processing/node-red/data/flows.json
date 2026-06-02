@@ -3,25 +3,25 @@
         "id": "flow-a-tab",
         "type": "tab",
         "label": "Flow A — Ingest & Store",
-        "info": "Receives sensor messages from MQTT and writes them to InfluxDB.\nTopics: bike/+/gps, bike/+/imu, bike/+/status, station/+/status"
+        "info": "Receives sensor messages from MQTT and writes them to InfluxDB.\nAll bike topics write to measurement 'bike' (models/bike.ts).\nStation topics write to measurement 'station'."
     },
     {
         "id": "flow-b-tab",
         "type": "tab",
         "label": "Flow B — Fall Detection",
-        "info": "Monitors IMU data for sudden acceleration spikes that indicate a fall."
+        "info": "Monitors IMU data for sudden acceleration spikes that indicate a fall.\nWrites to measurement 'alert' (models/alert.ts)."
     },
     {
         "id": "flow-c-tab",
         "type": "tab",
         "label": "Flow C — Parking Violation",
-        "info": "Detects stationary bikes parked outside authorized zones."
+        "info": "Detects stationary bikes parked outside authorized zones.\nWrites to measurement 'alert' (models/alert.ts)."
     },
     {
         "id": "flow-d-tab",
         "type": "tab",
         "label": "Flow D — Battery & Dock Events",
-        "info": "Monitors battery levels and dock/undock events."
+        "info": "Monitors battery levels and dock/undock events.\nWrites to measurement 'alert' (models/alert.ts)."
     },
 
     {
@@ -69,29 +69,12 @@
         "id": "func-store-gps",
         "type": "function",
         "z": "flow-a-tab",
-        "name": "Prepare GPS for InfluxDB",
-        "func": "const parts = msg.topic.split('/');\nconst bikeId = parts[1];\nconst data = msg.payload;\n\nmsg.payload = [{\n    measurement: 'gps',\n    tags: { bike_id: bikeId },\n    fields: {\n        lat: data.lat,\n        lng: data.lng,\n        speed: data.speed,\n        heading: data.heading,\n        altitude: data.altitude\n    }\n}];\n\nreturn msg;",
+        "name": "GPS → bike measurement",
+        "func": "const parts = msg.topic.split('/');\nconst bikeId = parts[1];\nconst data = msg.payload;\n\nmsg.payload = [{\n    measurement: 'bike',\n    tags: { id: bikeId },\n    fields: {\n        lat: data.lat,\n        lng: data.lng,\n        current_speed: data.current_speed\n    }\n}];\n\nreturn msg;",
         "outputs": 1,
         "x": 360,
         "y": 80,
-        "wires": [["influx-out-gps"]]
-    },
-    {
-        "id": "influx-out-gps",
-        "type": "influxdb batch",
-        "z": "flow-a-tab",
-        "influxdb": "influxdb-config",
-        "precision": "ms",
-        "retentionPolicy": "",
-        "name": "Write GPS",
-        "database": "bike_data",
-        "precisionV18FluxV20": "ms",
-        "retentionPolicyV18Flux": "",
-        "org": "iot-bikes",
-        "bucket": "bike_data",
-        "x": 600,
-        "y": 80,
-        "wires": [[]]
+        "wires": [["influx-out-bike"]]
     },
 
     {
@@ -111,29 +94,12 @@
         "id": "func-store-imu",
         "type": "function",
         "z": "flow-a-tab",
-        "name": "Prepare IMU for InfluxDB",
-        "func": "const parts = msg.topic.split('/');\nconst bikeId = parts[1];\nconst data = msg.payload;\n\nmsg.payload = [{\n    measurement: 'imu',\n    tags: { bike_id: bikeId },\n    fields: {\n        accel_x: data.accel_x,\n        accel_y: data.accel_y,\n        accel_z: data.accel_z,\n        gyro_x: data.gyro_x,\n        gyro_y: data.gyro_y,\n        gyro_z: data.gyro_z\n    }\n}];\n\nreturn msg;",
+        "name": "IMU → bike measurement",
+        "func": "const parts = msg.topic.split('/');\nconst bikeId = parts[1];\nconst data = msg.payload;\n\nmsg.payload = [{\n    measurement: 'bike',\n    tags: { id: bikeId },\n    fields: {\n        imu_x: data.x,\n        imu_y: data.y,\n        imu_z: data.z,\n        imu_dx: data.dx,\n        imu_dy: data.dy,\n        imu_dz: data.dz\n    }\n}];\n\nreturn msg;",
         "outputs": 1,
         "x": 360,
         "y": 180,
-        "wires": [["influx-out-imu"]]
-    },
-    {
-        "id": "influx-out-imu",
-        "type": "influxdb batch",
-        "z": "flow-a-tab",
-        "influxdb": "influxdb-config",
-        "precision": "ms",
-        "retentionPolicy": "",
-        "name": "Write IMU",
-        "database": "bike_data",
-        "precisionV18FluxV20": "ms",
-        "retentionPolicyV18Flux": "",
-        "org": "iot-bikes",
-        "bucket": "bike_data",
-        "x": 600,
-        "y": 180,
-        "wires": [[]]
+        "wires": [["influx-out-bike"]]
     },
 
     {
@@ -153,28 +119,29 @@
         "id": "func-store-status",
         "type": "function",
         "z": "flow-a-tab",
-        "name": "Prepare Status for InfluxDB",
-        "func": "const parts = msg.topic.split('/');\nconst bikeId = parts[1];\nconst data = msg.payload;\n\nmsg.payload = [{\n    measurement: 'bike_status',\n    tags: { bike_id: bikeId },\n    fields: {\n        battery_level: data.battery_level,\n        lock_state: data.lock_state,\n        alarm_active: data.alarm_active\n    }\n}];\n\nreturn msg;",
+        "name": "Status → bike measurement",
+        "func": "const parts = msg.topic.split('/');\nconst bikeId = parts[1];\nconst data = msg.payload;\n\nmsg.payload = [{\n    measurement: 'bike',\n    tags: { id: bikeId },\n    fields: {\n        battery: data.battery,\n        locked: data.locked,\n        status: data.status,\n        current_ride: data.current_ride\n    }\n}];\n\nreturn msg;",
         "outputs": 1,
         "x": 360,
         "y": 280,
-        "wires": [["influx-out-status"]]
+        "wires": [["influx-out-bike"]]
     },
+
     {
-        "id": "influx-out-status",
+        "id": "influx-out-bike",
         "type": "influxdb batch",
         "z": "flow-a-tab",
         "influxdb": "influxdb-config",
         "precision": "ms",
         "retentionPolicy": "",
-        "name": "Write Status",
+        "name": "Write Bike",
         "database": "bike_data",
         "precisionV18FluxV20": "ms",
         "retentionPolicyV18Flux": "",
         "org": "iot-bikes",
         "bucket": "bike_data",
         "x": 600,
-        "y": 280,
+        "y": 180,
         "wires": [[]]
     },
 
@@ -188,18 +155,18 @@
         "datatype": "json",
         "broker": "mqtt-broker-config",
         "x": 120,
-        "y": 380,
+        "y": 420,
         "wires": [["func-store-station"]]
     },
     {
         "id": "func-store-station",
         "type": "function",
         "z": "flow-a-tab",
-        "name": "Prepare Station for InfluxDB",
-        "func": "const parts = msg.topic.split('/');\nconst stationId = parts[1];\nconst data = msg.payload;\n\nmsg.payload = [{\n    measurement: 'station_status',\n    tags: { station_id: stationId },\n    fields: {\n        available_slots: data.available_slots,\n        bikes_docked: data.bikes_docked\n    }\n}];\n\nreturn msg;",
+        "name": "Station → station measurement",
+        "func": "const parts = msg.topic.split('/');\nconst stationId = parts[1];\nconst data = msg.payload;\n\nmsg.payload = [{\n    measurement: 'station',\n    tags: { station_id: stationId },\n    fields: {\n        available_slots: data.available_slots,\n        bikes_docked: data.bikes_docked\n    }\n}];\n\nreturn msg;",
         "outputs": 1,
         "x": 360,
-        "y": 380,
+        "y": 420,
         "wires": [["influx-out-station"]]
     },
     {
@@ -216,7 +183,7 @@
         "org": "iot-bikes",
         "bucket": "bike_data",
         "x": 600,
-        "y": 380,
+        "y": 420,
         "wires": [[]]
     },
 
@@ -239,29 +206,12 @@
         "id": "func-fall-detect",
         "type": "function",
         "z": "flow-b-tab",
-        "name": "Detect Fall (|accel_z| > 25)",
-        "func": "const data = msg.payload;\nconst parts = msg.topic.split('/');\nconst bikeId = parts[1];\n\nconst accelZ = Math.abs(data.accel_z);\n\nif (accelZ > 25) {\n    msg.payload = [{\n        measurement: 'alerts',\n        tags: {\n            bike_id: bikeId,\n            type: 'fall',\n            severity: 'high'\n        },\n        fields: {\n            message: 'Fall detected: |accel_z| = ' + accelZ.toFixed(2) + ' m/s²',\n            accel_z: data.accel_z,\n            acknowledged: false\n        }\n    }];\n    return msg;\n}\n\nreturn null;",
+        "name": "Detect Fall (|z| > 25)",
+        "func": "const data = msg.payload;\nconst parts = msg.topic.split('/');\nconst bikeId = parts[1];\n\nconst absZ = Math.abs(data.z);\n\nif (absZ > 25) {\n    const ts = Date.now();\n    msg.payload = [{\n        measurement: 'alert',\n        tags: {\n            bike_id: bikeId,\n            type: 'fall',\n            severity: 'high'\n        },\n        fields: {\n            alert_id: 'fall-' + bikeId + '-' + ts,\n            message: 'Fall detected: |z| = ' + absZ.toFixed(2) + ' m/s²',\n            acknowledged: false\n        }\n    }];\n    return msg;\n}\n\nreturn null;",
         "outputs": 1,
         "x": 360,
         "y": 100,
-        "wires": [["influx-out-fall-alert", "debug-fall"]]
-    },
-    {
-        "id": "influx-out-fall-alert",
-        "type": "influxdb batch",
-        "z": "flow-b-tab",
-        "influxdb": "influxdb-config",
-        "precision": "ms",
-        "retentionPolicy": "",
-        "name": "Write Fall Alert",
-        "database": "bike_data",
-        "precisionV18FluxV20": "ms",
-        "retentionPolicyV18Flux": "",
-        "org": "iot-bikes",
-        "bucket": "bike_data",
-        "x": 630,
-        "y": 80,
-        "wires": [[]]
+        "wires": [["influx-out-alert", "debug-fall"]]
     },
     {
         "id": "debug-fall",
@@ -296,28 +246,11 @@
         "type": "function",
         "z": "flow-c-tab",
         "name": "Detect Unauthorized Parking",
-        "func": "const data = msg.payload;\nconst parts = msg.topic.split('/');\nconst bikeId = parts[1];\n\n// Authorized parking zones in Genoa (polygons as [lat, lng] arrays)\nconst ZONES = [\n    { name: 'Porto Antico', center: [44.4095, 8.9290], radius: 300 },\n    { name: 'Piazza De Ferrari', center: [44.4072, 8.9345], radius: 200 },\n    { name: 'Stazione Brignole', center: [44.4153, 8.9425], radius: 250 },\n    { name: 'Stazione Principe', center: [44.4103, 8.9213], radius: 250 }\n];\n\nfunction distanceMeters(lat1, lng1, lat2, lng2) {\n    const R = 6371000;\n    const dLat = (lat2 - lat1) * Math.PI / 180;\n    const dLng = (lng2 - lng1) * Math.PI / 180;\n    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +\n              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *\n              Math.sin(dLng/2) * Math.sin(dLng/2);\n    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));\n}\n\n// Only check if the bike is nearly stationary\nif (data.speed >= 1) return null;\n\nconst insideZone = ZONES.some(zone => {\n    const dist = distanceMeters(data.lat, data.lng, zone.center[0], zone.center[1]);\n    return dist <= zone.radius;\n});\n\nif (!insideZone) {\n    msg.payload = [{\n        measurement: 'alerts',\n        tags: {\n            bike_id: bikeId,\n            type: 'parking_violation',\n            severity: 'medium'\n        },\n        fields: {\n            message: 'Bike parked outside authorized zone at ' + data.lat.toFixed(5) + ', ' + data.lng.toFixed(5),\n            lat: data.lat,\n            lng: data.lng,\n            acknowledged: false\n        }\n    }];\n    return msg;\n}\n\nreturn null;",
+        "func": "const data = msg.payload;\nconst parts = msg.topic.split('/');\nconst bikeId = parts[1];\n\nconst ZONES = [\n    { name: 'Porto Antico', center: [44.4095, 8.9290], radius: 300 },\n    { name: 'Piazza De Ferrari', center: [44.4072, 8.9345], radius: 200 },\n    { name: 'Stazione Brignole', center: [44.4153, 8.9425], radius: 250 },\n    { name: 'Stazione Principe', center: [44.4103, 8.9213], radius: 250 }\n];\n\nfunction distanceMeters(lat1, lng1, lat2, lng2) {\n    const R = 6371000;\n    const dLat = (lat2 - lat1) * Math.PI / 180;\n    const dLng = (lng2 - lng1) * Math.PI / 180;\n    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +\n              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *\n              Math.sin(dLng/2) * Math.sin(dLng/2);\n    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));\n}\n\nif (data.current_speed >= 1) return null;\n\nconst insideZone = ZONES.some(zone => {\n    const dist = distanceMeters(data.lat, data.lng, zone.center[0], zone.center[1]);\n    return dist <= zone.radius;\n});\n\nif (!insideZone) {\n    const ts = Date.now();\n    msg.payload = [{\n        measurement: 'alert',\n        tags: {\n            bike_id: bikeId,\n            type: 'parking_violation',\n            severity: 'medium'\n        },\n        fields: {\n            alert_id: 'parking_violation-' + bikeId + '-' + ts,\n            message: 'Bike parked outside authorized zone at ' + data.lat.toFixed(5) + ', ' + data.lng.toFixed(5),\n            acknowledged: false\n        }\n    }];\n    return msg;\n}\n\nreturn null;",
         "outputs": 1,
         "x": 360,
         "y": 100,
-        "wires": [["influx-out-parking-alert", "debug-parking"]]
-    },
-    {
-        "id": "influx-out-parking-alert",
-        "type": "influxdb batch",
-        "z": "flow-c-tab",
-        "influxdb": "influxdb-config",
-        "precision": "ms",
-        "retentionPolicy": "",
-        "name": "Write Parking Alert",
-        "database": "bike_data",
-        "precisionV18FluxV20": "ms",
-        "retentionPolicyV18Flux": "",
-        "org": "iot-bikes",
-        "bucket": "bike_data",
-        "x": 640,
-        "y": 80,
-        "wires": [[]]
+        "wires": [["influx-out-alert", "debug-parking"]]
     },
     {
         "id": "debug-parking",
@@ -327,7 +260,7 @@
         "active": true,
         "tosidebar": true,
         "console": true,
-        "x": 640,
+        "x": 630,
         "y": 140,
         "wires": []
     },
@@ -352,28 +285,11 @@
         "type": "function",
         "z": "flow-d-tab",
         "name": "Check Low Battery (< 15%)",
-        "func": "const data = msg.payload;\nconst parts = msg.topic.split('/');\nconst bikeId = parts[1];\n\nif (data.battery_level < 15) {\n    msg.payload = [{\n        measurement: 'alerts',\n        tags: {\n            bike_id: bikeId,\n            type: 'low_battery',\n            severity: 'low'\n        },\n        fields: {\n            message: 'Battery low: ' + data.battery_level.toFixed(1) + '%',\n            battery_level: data.battery_level,\n            acknowledged: false\n        }\n    }];\n    return msg;\n}\n\nreturn null;",
+        "func": "const data = msg.payload;\nconst parts = msg.topic.split('/');\nconst bikeId = parts[1];\n\nif (data.battery < 15) {\n    const ts = Date.now();\n    msg.payload = [{\n        measurement: 'alert',\n        tags: {\n            bike_id: bikeId,\n            type: 'low_battery',\n            severity: 'low'\n        },\n        fields: {\n            alert_id: 'low_battery-' + bikeId + '-' + ts,\n            message: 'Battery low: ' + data.battery.toFixed(1) + '%',\n            acknowledged: false\n        }\n    }];\n    return msg;\n}\n\nreturn null;",
         "outputs": 1,
         "x": 360,
         "y": 100,
-        "wires": [["influx-out-battery-alert", "debug-battery"]]
-    },
-    {
-        "id": "influx-out-battery-alert",
-        "type": "influxdb batch",
-        "z": "flow-d-tab",
-        "influxdb": "influxdb-config",
-        "precision": "ms",
-        "retentionPolicy": "",
-        "name": "Write Battery Alert",
-        "database": "bike_data",
-        "precisionV18FluxV20": "ms",
-        "retentionPolicyV18Flux": "",
-        "org": "iot-bikes",
-        "bucket": "bike_data",
-        "x": 630,
-        "y": 80,
-        "wires": [[]]
+        "wires": [["influx-out-alert", "debug-battery"]]
     },
     {
         "id": "debug-battery",
@@ -386,6 +302,24 @@
         "x": 630,
         "y": 140,
         "wires": []
+    },
+
+    {
+        "id": "influx-out-alert",
+        "type": "influxdb batch",
+        "z": "flow-b-tab",
+        "influxdb": "influxdb-config",
+        "precision": "ms",
+        "retentionPolicy": "",
+        "name": "Write Alert",
+        "database": "bike_data",
+        "precisionV18FluxV20": "ms",
+        "retentionPolicyV18Flux": "",
+        "org": "iot-bikes",
+        "bucket": "bike_data",
+        "x": 630,
+        "y": 80,
+        "wires": [[]]
     },
 
     {
