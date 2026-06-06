@@ -53,7 +53,7 @@ body {
 
 .topbar {
   display: flex;
-  align-items: end;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
   padding: 0.75rem 1rem;
@@ -79,6 +79,42 @@ body {
   gap: 1rem;
   color: #52606d;
   font-size: 0.92rem;
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.overview-grid div {
+  border: 1px solid #edf2f7;
+  background: #fbfdff;
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+
+.overview-grid label {
+  display: block;
+  color: #66788a;
+  font-size: 0.8rem;
+  margin-bottom: 0.25rem;
+}
+
+.overview-grid strong {
+  display: block;
+  font-size: 1rem;
+  color: #14202d;
+  word-break: break-word;
+}
+
+.overview-section {
+  border-bottom: 1px solid #edf2f7;
+}
+
+.overview-heading {
+  border-bottom: 0;
 }
 
 .split-layout {
@@ -222,6 +258,32 @@ body {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
   padding: 1rem;
+}
+
+.ride-list-section {
+  padding-bottom: 0.25rem;
+}
+
+.ride-heading {
+  border-bottom: 0;
+}
+
+.ride-table {
+  border: 0;
+  border-radius: 0;
+  max-height: 17rem;
+}
+
+.ride-table tbody tr {
+  cursor: pointer;
+}
+
+.ride-table tbody tr.selected {
+  background: #e8f1ff;
+}
+
+.ride-summary-grid {
+  padding-top: 0;
 }
 
 .detail-grid-wide {
@@ -392,6 +454,10 @@ tbody tr:hover {
   .statusbar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .map-panel {

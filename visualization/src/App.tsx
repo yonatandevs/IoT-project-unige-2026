@@ -1,14 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import Map, { Marker, type MapRef } from "react-map-gl/maplibre";
+import { useEffect, useMemo, useState } from "react";
+import MapGL, { Layer, Marker, Source } from "react-map-gl/maplibre";
 import type { StyleSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { fetchBikeHistory, fetchLatestBikeRows } from "./lib/influx";
 import { bikeColumns, type BikeRow } from "./types";
 
-type BikeMetrics = {
-  averageSpeed: number;
-  maxSpeed: number;
+type RideSummary = {
+  id: string;
+  startTime: string;
+  endTime: string;
+  durationMs: number;
+  averageSpeed: number | null;
+  maxSpeed: number | null;
   sampleCount: number;
+  routePoints: Array<{ lat: number; lng: number }>;
 };
 
 type ViewState = {
@@ -53,6 +58,7 @@ const OSM_STYLE: StyleSpecification = {
 export default function App() {
   const [latestRows, setLatestRows] = useState<BikeRow[]>([]);
   const [selectedBikeId, setSelectedBikeId] = useState<string | null>(null);
+  const [selectedRideId, setSelectedRideId] = useState<string | null>(null);
   const [historyRows, setHistoryRows] = useState<BikeRow[]>([]);
   const [loadingLatest, setLoadingLatest] = useState(true);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -60,7 +66,6 @@ export default function App() {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [viewState, setViewState] = useState<ViewState>(DEFAULT_VIEW_STATE);
-  const mapRef = useRef<MapRef | null>(null);
 
   async function loadLatestRows() {
     setLoadingLatest(true);
@@ -91,8 +96,12 @@ export default function App() {
   useEffect(() => {
     if (!selectedBikeId) {
       setHistoryRows([]);
+      setSelectedRideId(null);
       return;
     }
+
+    setSelectedRideId(null);
+    setHistoryRows([]);
 
     let active = true;
 
@@ -129,20 +138,47 @@ export default function App() {
     [latestRows, selectedBikeId]
   );
 
-  const metrics = useMemo(() => computeBikeMetrics(historyRows), [historyRows]);
   const batterySeries = useMemo(() => buildBatterySeries(historyRows), [historyRows]);
+  const rides = useMemo(() => summarizeRides(historyRows), [historyRows]);
+  const selectedRide = useMemo(
+    () => rides.find((ride) => ride.id === selectedRideId) ?? null,
+    [rides, selectedRideId]
+  );
+
+  useEffect(() => {
+    if (rides.length === 0) {
+      setSelectedRideId(null);
+      return;
+    }
+
+    setSelectedRideId((current) => {
+      if (current && rides.some((ride) => ride.id === current)) {
+        return current;
+      }
+      return rides[0]?.id ?? null;
+    });
+  }, [rides]);
+
+  useEffect(() => {
+    if (!selectedRide) {
+      return;
+    }
+
+    setViewState((current) => getViewForCoordinates(selectedRide.routePoints, current));
+  }, [selectedRide]);
+
+  const rideGeoJson = useMemo(() => buildRideGeoJson(selectedRide), [selectedRide]);
 
   return (
     <div className="app-shell">
       <header className="topbar">
         <div>
           <h1>Bike Telemetry</h1>
-          <p>Latest readings on the map and in the list, details on the right.</p>
         </div>
 
         <div className="topbar-actions">
           <button type="button" onClick={() => void loadLatestRows()} disabled={loadingLatest}>
-            {loadingLatest ? "Loading..." : "Refresh"}
+            {loadingLatest ? "Loading..." : "Refresh Data"}
           </button>
         </div>
       </header>
@@ -161,13 +197,26 @@ export default function App() {
 
       <section className="panel map-panel" aria-label="Bike position map">
         <div className="map-canvas">
-          <Map
-            ref={mapRef}
+          <MapGL
             {...viewState}
             style={{ width: "100%", height: "100%" }}
             onMove={(event) => setViewState(event.viewState)}
             mapStyle={OSM_STYLE}
           >
+            {rideGeoJson ? (
+              <Source id="ride-route" type="geojson" data={rideGeoJson}>
+                <Layer
+                  id="ride-route-line"
+                  type="line"
+                  paint={{
+                    "line-color": "#d64545",
+                    "line-width": 4,
+                    "line-opacity": 0.9,
+                  }}
+                />
+              </Source>
+            ) : null}
+
             {latestRows.map((bike) => {
               if (typeof bike.lat !== "number" || typeof bike.lng !== "number") {
                 return null;
@@ -200,7 +249,7 @@ export default function App() {
                 </Marker>
               );
             })}
-          </Map>
+          </MapGL>
 
           <div className="map-controls" aria-label="Map controls">
             <button type="button" onClick={() => setViewState((current) => ({ ...current, zoom: clamp(0, 22, current.zoom + 1) }))} aria-label="Zoom in" title="Zoom in">
@@ -219,7 +268,7 @@ export default function App() {
       <main className="split-layout">
         <section className="panel list-panel" aria-label="Latest bike list">
           <div className="panel-heading">
-            <h2>Latest bikes</h2>
+            <h2>Bikes</h2>
             <span>{loadingLatest ? "Loading" : `${latestRows.length} rows`}</span>
           </div>
 
@@ -232,7 +281,7 @@ export default function App() {
                   <th>locked</th>
                   <th>battery</th>
                   <th>speed</th>
-                  <th>time</th>
+                  <th>last seen</th>
                 </tr>
               </thead>
               <tbody>
@@ -257,7 +306,7 @@ export default function App() {
                       <td>{formatCell(row.status)}</td>
                       <td>{formatCell(row.locked)}</td>
                       <td>{formatCell(row.battery)}</td>
-                      <td>{formatCell(row.current_speed)}</td>
+                      <td>{formatMetric(row.current_speed, "km/h")}</td>
                       <td>{formatTime(row._time)}</td>
                     </tr>
                   );
@@ -278,7 +327,7 @@ export default function App() {
               <div className="panel-heading">
                 <div>
                   <h2>{selectedBike.id}</h2>
-                  <span>{formatTime(selectedBike._time)}</span>
+                  <span>{selectedRide ? `${rides.length} rides` : formatTime(selectedBike._time)}</span>
                 </div>
                 <span>{selectedBike.status ?? "unknown"}</span>
               </div>
@@ -290,37 +339,85 @@ export default function App() {
                 </section>
               ) : null}
 
-              <section className="detail-grid">
-                <div>
-                  <label>Average speed</label>
-                  <strong>{formatMetric(metrics?.averageSpeed, "km/h")}</strong>
+              <section className="overview-section">
+                <div className="panel-heading overview-heading">
+                  <h3>Overview</h3>
                 </div>
-                <div>
-                  <label>Max speed</label>
-                  <strong>{formatMetric(metrics?.maxSpeed, "km/h")}</strong>
-                </div>
-                <div>
-                  <label>Samples</label>
-                  <strong>{metrics ? metrics.sampleCount : "—"}</strong>
-                </div>
-                <div>
-                  <label>Battery</label>
-                  <strong>{formatCell(selectedBike.battery)}%</strong>
+                <div className="overview-grid">
+                  <div>
+                    <label>In use</label>
+                    <strong>{selectedBike.current_ride ? "yes" : "no"}</strong>
+                  </div>
+                  <div>
+                    <label>Current ride</label>
+                    <strong>{selectedBike.current_ride || "—"}</strong>
+                  </div>
+                  <div>
+                    <label>Current speed</label>
+                    <strong>{formatMetric(selectedBike.current_speed, "km/h")}</strong>
+                  </div>
+                  <div>
+                    <label>Current status</label>
+                    <strong>{selectedBike.status ?? "—"}</strong>
+                  </div>
+                  <div>
+                    <label>Last time seen</label>
+                    <strong>{formatTime(selectedBike._time)}</strong>
+                  </div>
                 </div>
               </section>
 
-              <section className="detail-grid detail-grid-wide">
-                <div>
-                  <label>Position</label>
-                  <strong>
-                    {formatCell(selectedBike.lat)}
-                    {", "}
-                    {formatCell(selectedBike.lng)}
-                  </strong>
+              <section className="ride-list-section">
+                <div className="panel-heading ride-heading">
+                  <h3>Rides</h3>
+                  <span>{rides.length} total</span>
                 </div>
-                <div>
-                  <label>Ride</label>
-                  <strong>{formatCell(selectedBike.current_ride)}</strong>
+                <div className="table-wrap ride-table">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>ride</th>
+                        <th>duration</th>
+                        <th>avg speed</th>
+                        <th>max speed</th>
+                        <th>start</th>
+                        <th>end</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rides.map((ride) => {
+                        const isSelected = ride.id === selectedRideId;
+
+                        return (
+                          <tr
+                            key={ride.id}
+                            className={isSelected ? "selected" : undefined}
+                            onClick={() => setSelectedRideId(ride.id)}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                setSelectedRideId(ride.id);
+                              }
+                            }}
+                          >
+                            <td>{ride.id}</td>
+                            <td>{formatDuration(ride.durationMs)}</td>
+                            <td>{formatMetric(ride.averageSpeed, "km/h")}</td>
+                            <td>{formatMetric(ride.maxSpeed, "km/h")}</td>
+                            <td>{formatTime(ride.startTime)}</td>
+                            <td>{formatTime(ride.endTime)}</td>
+                          </tr>
+                        );
+                      })}
+                      {!loadingHistory && rides.length === 0 ? (
+                        <tr>
+                          <td colSpan={6}>No rides found for this bike.</td>
+                        </tr>
+                      ) : null}
+                    </tbody>
+                  </table>
                 </div>
               </section>
 
@@ -403,21 +500,117 @@ function getViewForRows(rows: BikeRow[], fallback: ViewState): ViewState {
   };
 }
 
-function computeBikeMetrics(rows: BikeRow[]): BikeMetrics | null {
-  const speeds = rows
-    .map((row) => row.current_speed)
-    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+function getViewForCoordinates(
+  coordinates: Array<{ lat: number; lng: number }>,
+  fallback: ViewState
+): ViewState {
+  if (coordinates.length === 0) {
+    return fallback;
+  }
 
-  if (speeds.length === 0) {
+  if (coordinates.length === 1) {
+    return {
+      longitude: coordinates[0].lng,
+      latitude: coordinates[0].lat,
+      zoom: 14,
+      pitch: 0,
+      bearing: 0,
+    };
+  }
+
+  const lngs = coordinates.map((point) => point.lng);
+  const lats = coordinates.map((point) => point.lat);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const longitude = (minLng + maxLng) / 2;
+  const latitude = (minLat + maxLat) / 2;
+  const span = Math.max(maxLng - minLng, maxLat - minLat);
+  const zoom = clamp(5, 14, 13 - Math.log2(Math.max(span, 0.0005) * 300));
+
+  return {
+    longitude,
+    latitude,
+    zoom,
+    pitch: 0,
+    bearing: 0,
+  };
+}
+
+function summarizeRides(rows: BikeRow[]): RideSummary[] {
+  const groups = new globalThis.Map<string, BikeRow[]>();
+
+  for (const row of rows) {
+    const rideId = typeof row.current_ride === "string" ? row.current_ride.trim() : "";
+    if (!rideId) {
+      continue;
+    }
+
+    const bucket = groups.get(rideId);
+    if (bucket) {
+      bucket.push(row);
+    } else {
+      groups.set(rideId, [row]);
+    }
+  }
+
+  return Array.from(groups.entries())
+    .map(([rideId, rideRows]) => {
+      const sortedRows = [...rideRows].sort((a, b) => Date.parse(a._time) - Date.parse(b._time));
+      const timestamps = sortedRows.map((row) => Date.parse(row._time)).filter(Number.isFinite);
+      const speeds = sortedRows
+        .map((row) => row.current_speed)
+        .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+      const routePoints = sortedRows
+        .map((row) => ({ lat: row.lat, lng: row.lng }))
+        .filter((point): point is { lat: number; lng: number } =>
+          typeof point.lat === "number" && typeof point.lng === "number"
+        );
+
+      const durationMs =
+        timestamps.length >= 2 ? Math.max(0, timestamps[timestamps.length - 1] - timestamps[0]) : 0;
+      const averageSpeed = speeds.length > 0 ? speeds.reduce((sum, value) => sum + value, 0) / speeds.length : null;
+      const maxSpeed = speeds.length > 0 ? Math.max(...speeds) : null;
+
+      return {
+        id: rideId,
+        startTime: sortedRows[0]?._time ?? "",
+        endTime: sortedRows[sortedRows.length - 1]?._time ?? "",
+        durationMs,
+        averageSpeed,
+        maxSpeed,
+        sampleCount: sortedRows.length,
+        routePoints,
+      };
+    })
+    .sort((a, b) => Date.parse(b.endTime) - Date.parse(a.endTime));
+}
+
+function buildRideGeoJson(ride: RideSummary | null) {
+  if (!ride || ride.routePoints.length === 0) {
     return null;
   }
 
-  const sum = speeds.reduce((total, value) => total + value, 0);
+  if (ride.routePoints.length < 2) {
+    return null;
+  }
+
   return {
-    averageSpeed: sum / speeds.length,
-    maxSpeed: Math.max(...speeds),
-    sampleCount: rows.length,
-  };
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        properties: {
+          kind: "route",
+        },
+        geometry: {
+          type: "LineString",
+          coordinates: ride.routePoints.map((point) => [point.lng, point.lat]),
+        },
+      },
+    ],
+  } as const;
 }
 
 function buildBatterySeries(rows: BikeRow[]) {
@@ -506,7 +699,32 @@ function formatMetric(value: number | null | undefined, unit: string): string {
   return `${value.toFixed(2)} ${unit}`;
 }
 
+function formatDuration(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) {
+    return "0s";
+  }
+
+  const totalSeconds = Math.round(value / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${seconds}s`;
+  }
+
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+
+  return `${seconds}s`;
+}
+
 function formatTime(value: string): string {
+  if (!value) {
+    return "—";
+  }
+
   const timestamp = Date.parse(value);
   if (Number.isNaN(timestamp)) {
     return value;
