@@ -1,4 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Map, { Marker, type MapRef } from "react-map-gl/maplibre";
+import type { StyleSpecification } from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 import { fetchBikeHistory, fetchLatestBikeRows } from "./lib/influx";
 import { bikeColumns, type BikeRow } from "./types";
 
@@ -7,6 +10,45 @@ type BikeMetrics = {
   maxSpeed: number;
   sampleCount: number;
 };
+
+type ViewState = {
+  longitude: number;
+  latitude: number;
+  zoom: number;
+  pitch: number;
+  bearing: number;
+};
+
+const DEFAULT_VIEW_STATE: ViewState = {
+  longitude: 8.9463,
+  latitude: 44.4056,
+  zoom: 12,
+  pitch: 0,
+  bearing: 0,
+};
+
+const OSM_STYLE: StyleSpecification = {
+  version: 8,
+  name: "OpenStreetMap Raster",
+  sources: {
+    osm: {
+      type: "raster",
+      tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+      tileSize: 256,
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    },
+  },
+  layers: [
+    {
+      id: "osm",
+      type: "raster",
+      source: "osm",
+      minzoom: 0,
+      maxzoom: 19,
+    },
+  ],
+} as const;
 
 export default function App() {
   const [latestRows, setLatestRows] = useState<BikeRow[]>([]);
@@ -17,6 +59,8 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [viewState, setViewState] = useState<ViewState>(DEFAULT_VIEW_STATE);
+  const mapRef = useRef<MapRef | null>(null);
 
   async function loadLatestRows() {
     setLoadingLatest(true);
@@ -32,6 +76,7 @@ export default function App() {
         }
         return data[0]?.id ?? null;
       });
+      setViewState((current) => getViewForRows(data, current));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load bike data");
     } finally {
@@ -56,7 +101,7 @@ export default function App() {
       setDetailError(null);
 
       try {
-        const data = await fetchBikeHistory(selectedBikeId!);
+        const data = await fetchBikeHistory(selectedBikeId);
         if (active) {
           setHistoryRows(data);
         }
@@ -92,7 +137,7 @@ export default function App() {
       <header className="topbar">
         <div>
           <h1>Bike Telemetry</h1>
-          <p>Latest reading per bike on the left, detailed history on the right.</p>
+          <p>Latest readings on the map and in the list, details on the right.</p>
         </div>
 
         <div className="topbar-actions">
@@ -113,6 +158,63 @@ export default function App() {
           <pre>{error}</pre>
         </section>
       ) : null}
+
+      <section className="panel map-panel" aria-label="Bike position map">
+        <div className="map-canvas">
+          <Map
+            ref={mapRef}
+            {...viewState}
+            style={{ width: "100%", height: "100%" }}
+            onMove={(event) => setViewState(event.viewState)}
+            mapStyle={OSM_STYLE}
+          >
+            {latestRows.map((bike) => {
+              if (typeof bike.lat !== "number" || typeof bike.lng !== "number") {
+                return null;
+              }
+
+              const isSelected = bike.id === selectedBikeId;
+
+              return (
+                <Marker
+                  key={bike.id}
+                  longitude={bike.lng}
+                  latitude={bike.lat}
+                  anchor="center"
+                >
+                  <button
+                    type="button"
+                    className={`map-marker${isSelected ? " selected" : ""}`}
+                    aria-label={`Select ${bike.id}`}
+                    title={bike.id}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSelectedBikeId(bike.id);
+                      setViewState((current) => ({
+                        ...current,
+                        longitude: bike.lng!,
+                        latitude: bike.lat!,
+                      }));
+                    }}
+                  />
+                </Marker>
+              );
+            })}
+          </Map>
+
+          <div className="map-controls" aria-label="Map controls">
+            <button type="button" onClick={() => setViewState((current) => ({ ...current, zoom: clamp(0, 22, current.zoom + 1) }))} aria-label="Zoom in" title="Zoom in">
+              <SvgPlus />
+            </button>
+            <button type="button" onClick={() => setViewState((current) => ({ ...current, zoom: clamp(0, 22, current.zoom - 1) }))} aria-label="Zoom out" title="Zoom out">
+              <SvgMinus />
+            </button>
+            <button type="button" onClick={() => setViewState(getViewForRows(latestRows, DEFAULT_VIEW_STATE))} aria-label="Fit bikes" title="Fit bikes">
+              <SvgTarget />
+            </button>
+          </div>
+        </div>
+      </section>
 
       <main className="split-layout">
         <section className="panel list-panel" aria-label="Latest bike list">
@@ -260,6 +362,47 @@ export default function App() {
   );
 }
 
+function getViewForRows(rows: BikeRow[], fallback: ViewState): ViewState {
+  const coordinates = rows
+    .map((row) => ({ lat: row.lat, lng: row.lng }))
+    .filter((value): value is { lat: number; lng: number } =>
+      typeof value.lat === "number" && typeof value.lng === "number"
+    );
+
+  if (coordinates.length === 0) {
+    return fallback;
+  }
+
+  if (coordinates.length === 1) {
+    return {
+      longitude: coordinates[0].lng,
+      latitude: coordinates[0].lat,
+      zoom: 14,
+      pitch: 0,
+      bearing: 0,
+    };
+  }
+
+  const lngs = coordinates.map((point) => point.lng);
+  const lats = coordinates.map((point) => point.lat);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const longitude = (minLng + maxLng) / 2;
+  const latitude = (minLat + maxLat) / 2;
+  const span = Math.max(maxLng - minLng, maxLat - minLat);
+  const zoom = clamp(5, 14, 13 - Math.log2(Math.max(span, 0.0005) * 300));
+
+  return {
+    longitude,
+    latitude,
+    zoom,
+    pitch: 0,
+    bearing: 0,
+  };
+}
+
 function computeBikeMetrics(rows: BikeRow[]): BikeMetrics | null {
   const speeds = rows
     .map((row) => row.current_speed)
@@ -373,4 +516,34 @@ function formatTime(value: string): string {
     dateStyle: "short",
     timeStyle: "medium",
   }).format(timestamp);
+}
+
+function clamp(min: number, max: number, value: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function SvgPlus() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M11 5h2v14h-2z" />
+      <path d="M5 11h14v2H5z" />
+    </svg>
+  );
+}
+
+function SvgMinus() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M5 11h14v2H5z" />
+    </svg>
+  );
+}
+
+function SvgTarget() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M11 3h2v4h-2zM11 17h2v4h-2zM3 11h4v2H3zM17 11h4v2h-4z" />
+      <circle cx="12" cy="12" r="4" />
+    </svg>
+  );
 }
