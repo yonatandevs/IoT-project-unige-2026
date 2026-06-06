@@ -175,35 +175,6 @@ body {
   box-shadow: 0 0 0 4px rgba(214, 69, 69, 0.22);
 }
 
-.map-controls {
-  position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
-  display: grid;
-  gap: 0.4rem;
-  z-index: 2;
-}
-
-.map-controls button {
-  width: 2.2rem;
-  height: 2.2rem;
-  padding: 0;
-  border: 1px solid #c8d3e0;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #243b53;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 1px 3px rgba(18, 34, 60, 0.1);
-}
-
-.map-controls button svg {
-  width: 1rem;
-  height: 1rem;
-  fill: currentColor;
-}
-
 .panel-heading {
   display: flex;
   align-items: baseline;
@@ -324,41 +295,6 @@ body {
 
 .chart-wrap {
   padding: 0 1rem 1rem;
-}
-
-.chart-wrap svg {
-  width: 100%;
-  height: auto;
-  display: block;
-  background: #fbfdff;
-  border: 1px solid #edf2f7;
-  border-radius: 6px;
-}
-
-.chart-wrap line {
-  stroke: #c8d3e0;
-  stroke-width: 1;
-}
-
-.chart-wrap polyline {
-  fill: none;
-  stroke: #2f6fed;
-  stroke-width: 2.5;
-}
-
-.chart-wrap circle {
-  fill: #2f6fed;
-  stroke: #ffffff;
-  stroke-width: 1.5;
-}
-
-.chart-labels {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-top: 0.5rem;
-  color: #66788a;
-  font-size: 0.8rem;
 }
 
 .detail-table {

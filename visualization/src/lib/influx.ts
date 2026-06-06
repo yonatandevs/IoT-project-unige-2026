@@ -94,7 +94,6 @@ function parseInfluxCsv(csv: string): BikeRow[] {
 
 async function queryInflux(fluxQuery: string): Promise<BikeRow[]> {
   const org = getEnv("VITE_INFLUXDB_ORG", "iot-bikes");
-  const bucket = getEnv("VITE_INFLUXDB_BUCKET", "bike_data");
   const token = getEnv("VITE_INFLUXDB_TOKEN", "dev-token-change-in-production");
   const proxyPrefix = getEnv("VITE_INFLUXDB_PROXY_PREFIX", "/influx");
 
