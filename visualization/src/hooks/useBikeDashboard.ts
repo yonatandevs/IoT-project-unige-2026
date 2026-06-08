@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchBikeHistory, fetchLatestBikeRows } from "../lib/influx";
-import type { BikeRow } from "../types";
+import {
+  acknowledgeBikeAlert,
+  fetchBikeAlertAcknowledgements,
+  fetchBikeAlerts,
+  fetchBikeHistory,
+  fetchLatestBikeRows,
+} from "../lib/influx";
+import type { AlertAckRow, AlertRow, BikeRow } from "../types";
 import {
   DEFAULT_VIEW_STATE,
   buildBatterySeries,
@@ -16,10 +22,15 @@ export function useBikeDashboard() {
   const [selectedBikeId, setSelectedBikeId] = useState<string | null>(null);
   const [selectedRideId, setSelectedRideId] = useState<string | null>(null);
   const [historyRows, setHistoryRows] = useState<BikeRow[]>([]);
+  const [alertRows, setAlertRows] = useState<AlertRow[]>([]);
+  const [ackRows, setAckRows] = useState<AlertAckRow[]>([]);
   const [loadingLatest, setLoadingLatest] = useState(true);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [loadingAlerts, setLoadingAlerts] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [alertsError, setAlertsError] = useState<string | null>(null);
+  const [alertActionError, setAlertActionError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [viewState, setViewState] = useState<ViewState>(DEFAULT_VIEW_STATE);
 
@@ -50,9 +61,16 @@ export function useBikeDashboard() {
   }, []);
 
   useEffect(() => {
-    if (!selectedBikeId) {
+    const bikeId = selectedBikeId;
+
+    if (!bikeId) {
       setHistoryRows([]);
+      setAlertRows([]);
+      setAckRows([]);
       setSelectedRideId(null);
+      setAlertsError(null);
+      setAlertActionError(null);
+      setLoadingHistory(false);
       return;
     }
 
@@ -61,12 +79,12 @@ export function useBikeDashboard() {
 
     let active = true;
 
-    async function loadHistory() {
+    async function loadHistory(targetBikeId: string) {
       setLoadingHistory(true);
       setDetailError(null);
 
       try {
-        const data = await fetchBikeHistory(selectedBikeId!);
+        const data = await fetchBikeHistory(targetBikeId);
         if (active) {
           setHistoryRows(data);
         }
@@ -82,12 +100,90 @@ export function useBikeDashboard() {
       }
     }
 
-    void loadHistory();
+    void loadHistory(bikeId);
 
     return () => {
       active = false;
     };
   }, [selectedBikeId]);
+
+  useEffect(() => {
+    const bikeId = selectedBikeId;
+
+    if (!bikeId) {
+      setAlertRows([]);
+      setAckRows([]);
+      setAlertsError(null);
+      setAlertActionError(null);
+      setLoadingAlerts(false);
+      return;
+    }
+
+    let active = true;
+
+    async function loadAlerts(targetBikeId: string) {
+      setLoadingAlerts(true);
+      setAlertsError(null);
+
+      try {
+        const [alertsData, ackData] = await Promise.all([
+          fetchBikeAlerts(targetBikeId),
+          fetchBikeAlertAcknowledgements(targetBikeId),
+        ]);
+        if (active) {
+          setAlertRows(alertsData);
+          setAckRows(ackData);
+        }
+      } catch (err) {
+        if (active) {
+          setAlertsError(err instanceof Error ? err.message : "Failed to load bike alerts");
+          setAlertRows([]);
+          setAckRows([]);
+        }
+      } finally {
+        if (active) {
+          setLoadingAlerts(false);
+        }
+      }
+    }
+
+    void loadAlerts(bikeId);
+
+    return () => {
+      active = false;
+    };
+  }, [selectedBikeId]);
+
+  async function acknowledgeAlert(alertId: string) {
+    const bikeId = selectedBikeId;
+    if (!bikeId) {
+      return;
+    }
+
+    setAlertActionError(null);
+
+    try {
+      await acknowledgeBikeAlert(bikeId, alertId);
+      setAckRows((current) => {
+        if (current.some((row) => row.alert_id === alertId)) {
+          return current;
+        }
+
+        return [
+          {
+            _time: new Date().toISOString(),
+            bike_id: bikeId,
+            alert_id: alertId,
+            acked: true,
+            source: "visualization",
+          },
+          ...current,
+        ];
+      });
+    } catch (err) {
+      setAlertActionError(err instanceof Error ? err.message : "Failed to acknowledge alert");
+    }
+  }
 
   const selectedBike = useMemo(
     () => latestRows.find((row) => row.id === selectedBikeId) ?? null,
@@ -100,6 +196,16 @@ export function useBikeDashboard() {
   );
   const batterySeries = useMemo(() => buildBatterySeries(historyRows), [historyRows]);
   const rideGeoJson = useMemo(() => buildRideGeoJson(selectedRide), [selectedRide]);
+  const alerts = useMemo(() => {
+    const acknowledgedIds = new Set(
+      ackRows.filter((row) => row.acked !== false).map((row) => row.alert_id)
+    );
+
+    return alertRows.map((row) => ({
+      ...row,
+      acknowledged: row.acknowledged === true || acknowledgedIds.has(row.alert_id ?? ""),
+    }));
+  }, [ackRows, alertRows]);
 
   useEffect(() => {
     if (rides.length === 0) {
@@ -131,16 +237,21 @@ export function useBikeDashboard() {
     selectedRide,
     rides,
     batterySeries,
+    alerts,
     rideGeoJson,
     loadingLatest,
     loadingHistory,
+    loadingAlerts,
     error,
     detailError,
+    alertsError,
+    alertActionError,
     lastUpdated,
     viewState,
     setViewState,
     setSelectedBikeId,
     setSelectedRideId,
+    acknowledgeAlert,
     refresh: loadLatestRows,
   };
 }

@@ -1,4 +1,4 @@
-import type { BikeRow } from "../types";
+import type { AlertAckRow, AlertRow, BikeRow } from "../types";
 
 function getEnv(name: string, fallback = ""): string {
   const env = import.meta.env as Record<string, string | undefined>;
@@ -40,17 +40,33 @@ function escapeFluxString(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-function coerceValue(column: string, value: string): string | number | boolean | undefined {
-  if (column === "locked") {
+function escapeTag(value: string): string {
+  return String(value).replace(/\\/g, "\\\\").replace(/,/g, "\\,").replace(/ /g, "\\ ");
+}
+
+type InfluxValue = string | number | boolean | undefined;
+type InfluxRecord = Record<string, InfluxValue>;
+
+const booleanColumns = new Set(["locked", "acknowledged", "acked"]);
+const stringColumns = new Set([
+  "_time",
+  "id",
+  "status",
+  "current_ride",
+  "bike_id",
+  "type",
+  "severity",
+  "alert_id",
+  "message",
+  "source",
+]);
+
+function coerceValue(column: string, value: string): InfluxValue {
+  if (booleanColumns.has(column)) {
     return value === "true";
   }
 
-  if (
-    column === "_time" ||
-    column === "id" ||
-    column === "status" ||
-    column === "current_ride"
-  ) {
+  if (stringColumns.has(column)) {
     return value;
   }
 
@@ -62,7 +78,7 @@ function coerceValue(column: string, value: string): string | number | boolean |
   return Number.isNaN(numeric) ? value : numeric;
 }
 
-function parseInfluxCsv(csv: string): BikeRow[] {
+function parseInfluxCsv(csv: string): InfluxRecord[] {
   const lines = csv.split(/\r?\n/).filter((line) => line.trim().length > 0);
   if (lines.length === 0) {
     return [];
@@ -74,25 +90,28 @@ function parseInfluxCsv(csv: string): BikeRow[] {
   }
 
   const headers = parseCsvLine(dataLines[0]).map((header) => header.trim());
-  const rows: BikeRow[] = [];
+  const rows: InfluxRecord[] = [];
 
   for (const line of dataLines.slice(1)) {
     const values = parseCsvLine(line);
-    const record: Record<string, string | number | boolean | undefined> = {};
+    const record: InfluxRecord = {};
 
     headers.forEach((header, index) => {
       record[header] = coerceValue(header, values[index] ?? "");
     });
 
-    if (typeof record._time === "string" && typeof record.id === "string") {
-      rows.push(record as BikeRow);
+    if (
+      typeof record._time === "string" &&
+      (typeof record.id === "string" || typeof record.bike_id === "string")
+    ) {
+      rows.push(record);
     }
   }
 
   return rows;
 }
 
-async function queryInflux(fluxQuery: string): Promise<BikeRow[]> {
+async function queryInflux(fluxQuery: string): Promise<InfluxRecord[]> {
   const org = getEnv("VITE_INFLUXDB_ORG", "iot-bikes");
   const token = getEnv("VITE_INFLUXDB_TOKEN", "dev-token-change-in-production");
   const proxyPrefix = getEnv("VITE_INFLUXDB_PROXY_PREFIX", "/influx");
@@ -137,7 +156,7 @@ from(bucket: "${bucket}")
   |> sort(columns: ["id"])
 `;
 
-  return queryInflux(fluxQuery);
+  return (await queryInflux(fluxQuery)) as BikeRow[];
 }
 
 export async function fetchBikeHistory(bikeId: string): Promise<BikeRow[]> {
@@ -153,5 +172,65 @@ from(bucket: "${bucket}")
   |> sort(columns: ["_time"])
 `;
 
-  return queryInflux(fluxQuery);
+  return (await queryInflux(fluxQuery)) as BikeRow[];
+}
+
+export async function fetchBikeAlerts(bikeId: string): Promise<AlertRow[]> {
+  const bucket = getEnv("VITE_INFLUXDB_BUCKET", "bike_data");
+  const escapedBikeId = escapeFluxString(bikeId);
+
+  const fluxQuery = `
+from(bucket: "${bucket}")
+  |> range(start: 0)
+  |> filter(fn: (r) => r._measurement == "alert" and r.bike_id == "${escapedBikeId}")
+  |> pivot(rowKey: ["_time", "bike_id"], columnKey: ["_field"], valueColumn: "_value")
+  |> keep(columns: ["_time", "bike_id", "type", "severity", "alert_id", "message", "acknowledged"])
+  |> sort(columns: ["_time"], desc: true)
+`;
+
+  return (await queryInflux(fluxQuery)) as AlertRow[];
+}
+
+export async function fetchBikeAlertAcknowledgements(bikeId: string): Promise<AlertAckRow[]> {
+  const bucket = getEnv("VITE_INFLUXDB_BUCKET", "bike_data");
+  const escapedBikeId = escapeFluxString(bikeId);
+
+  const fluxQuery = `
+from(bucket: "${bucket}")
+  |> range(start: 0)
+  |> filter(fn: (r) => r._measurement == "alert_ack" and r.bike_id == "${escapedBikeId}")
+  |> pivot(rowKey: ["_time", "bike_id", "alert_id"], columnKey: ["_field"], valueColumn: "_value")
+  |> keep(columns: ["_time", "bike_id", "alert_id", "acked", "source"])
+  |> sort(columns: ["_time"], desc: true)
+`;
+
+  return (await queryInflux(fluxQuery)) as AlertAckRow[];
+}
+
+export async function acknowledgeBikeAlert(bikeId: string, alertId: string): Promise<void> {
+  const org = getEnv("VITE_INFLUXDB_ORG", "iot-bikes");
+  const bucket = getEnv("VITE_INFLUXDB_BUCKET", "bike_data");
+  const token = getEnv("VITE_INFLUXDB_TOKEN", "dev-token-change-in-production");
+  const proxyPrefix = getEnv("VITE_INFLUXDB_PROXY_PREFIX", "/influx");
+  const timestamp = `${BigInt(Date.now()) * 1000000n}`;
+
+  const line = [
+    `alert_ack,bike_id=${escapeTag(bikeId)},alert_id=${escapeTag(alertId)} acked=true,source="visualization" ${timestamp}`,
+  ].join("\n");
+
+  const response = await fetch(
+    `${proxyPrefix}/api/v2/write?org=${encodeURIComponent(org)}&bucket=${encodeURIComponent(bucket)}&precision=ns`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Token ${token}`,
+        "Content-Type": "text/plain; charset=utf-8",
+      },
+      body: line,
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
 }

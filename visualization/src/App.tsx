@@ -75,11 +75,16 @@ export default function App() {
             selectedBike={dashboard.selectedBike}
             selectedRide={dashboard.selectedRide}
             rides={dashboard.rides}
+            alerts={dashboard.alerts}
             batterySeries={dashboard.batterySeries}
             loadingHistory={dashboard.loadingHistory}
+            loadingAlerts={dashboard.loadingAlerts}
             detailError={dashboard.detailError}
+            alertsError={dashboard.alertsError}
+            alertActionError={dashboard.alertActionError}
             selectedRideId={dashboard.selectedRideId}
             onSelectRide={handleSelectRide}
+            onAcknowledgeAlert={dashboard.acknowledgeAlert}
           />
         </aside>
       </main>

@@ -17,6 +17,26 @@ export interface BikeRow {
   [key: string]: string | number | boolean | undefined;
 }
 
+export interface AlertRow {
+  _time: string;
+  bike_id: string;
+  type?: string;
+  severity?: string;
+  alert_id?: string;
+  message?: string;
+  acknowledged?: boolean;
+  [key: string]: string | number | boolean | undefined;
+}
+
+export interface AlertAckRow {
+  _time: string;
+  bike_id: string;
+  alert_id: string;
+  acked?: boolean;
+  source?: string;
+  [key: string]: string | number | boolean | undefined;
+}
+
 export const bikeColumns = [
   "_time",
   "id",
@@ -33,4 +53,14 @@ export const bikeColumns = [
   "imu_dx",
   "imu_dy",
   "imu_dz",
+] as const;
+
+export const alertColumns = [
+  "_time",
+  "bike_id",
+  "type",
+  "severity",
+  "alert_id",
+  "message",
+  "acknowledged",
 ] as const;

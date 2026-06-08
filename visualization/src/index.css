@@ -237,6 +237,10 @@ body {
   padding-bottom: 0.25rem;
 }
 
+.alert-list-section {
+  padding-bottom: 0.25rem;
+}
+
 .ride-heading {
   border-bottom: 0;
 }
@@ -245,6 +249,69 @@ body {
   border: 0;
   border-radius: 0;
   max-height: 17rem;
+}
+
+.alert-table {
+  border: 0;
+  border-radius: 0;
+  max-height: 14rem;
+}
+
+.alert-row.unacknowledged {
+  background: #fff5f5;
+}
+
+.alert-row.acknowledged {
+  background: #f4fbf5;
+}
+
+.ack-indicator {
+  display: inline-block;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  vertical-align: middle;
+}
+
+.ack-indicator--unacknowledged {
+  background: #d64545;
+  border-color: #b93232;
+  box-shadow: 0 0 0 3px rgba(214, 69, 69, 0.12);
+}
+
+.ack-indicator--acknowledged {
+  background: #2f9e44;
+  border-color: #258138;
+  box-shadow: 0 0 0 3px rgba(47, 158, 68, 0.12);
+}
+
+.ack-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid #c8d3e0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #2f6fed;
+}
+
+.ack-button:hover {
+  background: #edf4ff;
+}
+
+.ack-button svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: currentColor;
+}
+
+.alert-ack-status {
+  color: #52606d;
+  font-size: 0.82rem;
 }
 
 .ride-table tbody tr {
