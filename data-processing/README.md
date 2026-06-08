@@ -79,7 +79,8 @@ docker compose down -v
 ## Demo Data Seeder
 
 Write demo `bike` measurement points directly to InfluxDB using the same
-connection values as `docker-compose.yml`:
+connection values as `docker-compose.yml`. The seeder also adds `alert`
+measurement rows for some of the bikes.
 
 ```bash
 node demo-data/seed-bike-demo.js

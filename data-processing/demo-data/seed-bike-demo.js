@@ -235,6 +235,49 @@ function bikeToLineProtocol(bike) {
   return `${measurement},${tagSet} ${fieldSet} ${toNanoseconds(bike.timestamp)}`;
 }
 
+function buildAlertPoints(bikeId, bikeIndex, timestamp) {
+  const lowBatteryBattery = Math.max(6.5, 11.2 - bikeIndex * 0.6);
+  const parkingLat = 44.4200 + bikeIndex * 0.0005;
+  const parkingLng = 8.9600 + bikeIndex * 0.0007;
+
+  return [
+    {
+      bike_id: bikeId,
+      type: "low_battery",
+      severity: "low",
+      timestamp: new Date(timestamp.getTime() + 1000),
+      alert_id: `low_battery-${bikeId}-${timestamp.getTime() + 1000}`,
+      message: `Battery low: ${lowBatteryBattery.toFixed(1)}%`,
+      acknowledged: false,
+    },
+    {
+      bike_id: bikeId,
+      type: "parking_violation",
+      severity: "medium",
+      timestamp: new Date(timestamp.getTime() + 2000),
+      alert_id: `parking_violation-${bikeId}-${timestamp.getTime() + 2000}`,
+      message: `Bike parked outside authorized zone at ${parkingLat.toFixed(5)}, ${parkingLng.toFixed(5)}`,
+      acknowledged: false,
+    },
+  ];
+}
+
+function alertToLineProtocol(alert) {
+  const measurement = "alert";
+  const tagSet = [
+    `bike_id=${escapeTag(alert.bike_id)}`,
+    `type=${escapeTag(alert.type)}`,
+    `severity=${escapeTag(alert.severity)}`,
+  ].join(",");
+  const fieldSet = [
+    `alert_id=${formatFieldValue(alert.alert_id)}`,
+    `message=${formatFieldValue(alert.message)}`,
+    `acknowledged=${formatFieldValue(alert.acknowledged)}`,
+  ].join(",");
+
+  return `${measurement},${tagSet} ${fieldSet} ${toNanoseconds(alert.timestamp)}`;
+}
+
 function chunk(array, size) {
   const chunks = [];
   for (let i = 0; i < array.length; i += size) {
@@ -309,14 +352,23 @@ async function main() {
   }
 
   const allLines = [];
+  const alertBikeCount = Math.ceil(args.bikes * 0.6);
   for (let bikeIndex = 0; bikeIndex < args.bikes; bikeIndex += 1) {
     const bikeId = `bike-${String(bikeIndex + 1).padStart(3, "0")}`;
     const random = createRandom(hashString(bikeId));
+    let lastBikeTimestamp = null;
 
     for (let pointIndex = 0; pointIndex < args.points; pointIndex += 1) {
       const timestamp = new Date(startTime.getTime() + pointIndex * args.intervalSeconds * 1000);
       const bike = buildBikePoint(bikeId, bikeIndex, pointIndex, args.points, timestamp, random);
       allLines.push(bikeToLineProtocol(bike));
+      lastBikeTimestamp = timestamp;
+    }
+
+    if (bikeIndex < alertBikeCount && lastBikeTimestamp) {
+      for (const alert of buildAlertPoints(bikeId, bikeIndex, lastBikeTimestamp)) {
+        allLines.push(alertToLineProtocol(alert));
+      }
     }
   }
 
@@ -331,7 +383,7 @@ async function main() {
   }
 
   console.log(
-    `Seeded ${allLines.length} bike points into ${config.url} (org=${config.org}, bucket=${config.bucket}).`
+    `Seeded ${allLines.length} telemetry and alert points into ${config.url} (org=${config.org}, bucket=${config.bucket}).`
   );
 }
 
