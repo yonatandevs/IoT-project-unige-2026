@@ -64,7 +64,7 @@ export type RideGeoJson =
 
 export function getViewForRows(rows: BikeRow[], fallback: ViewState): ViewState {
   const coordinates = rows
-    .map((row) => ({ lat: row.lat, lng: row.lng }))
+    .map(({ lat, lng}) => ({ lat, lng }))
     .filter((value): value is { lat: number; lng: number } =>
       typeof value.lat === "number" && typeof value.lng === "number"
     );
@@ -98,13 +98,11 @@ export function getViewForCoordinates(
   const maxLat = Math.max(...lats);
   const longitude = (minLng + maxLng) / 2;
   const latitude = (minLat + maxLat) / 2;
-  const span = Math.max(maxLng - minLng, maxLat - minLat);
-  const zoom = clamp(5, 14, 13 - Math.log2(Math.max(span, 0.0005) * 300));
 
   return {
     longitude,
     latitude,
-    zoom,
+    zoom: 12,
     pitch: 0,
     bearing: 0,
   };
@@ -188,8 +186,4 @@ export function buildBatterySeries(rows: BikeRow[]) {
     }))
     .filter((point): point is { time: string; battery: number } => point.battery !== null)
     .sort((a, b) => Date.parse(a.time) - Date.parse(b.time));
-}
-
-function clamp(min: number, max: number, value: number): number {
-  return Math.min(max, Math.max(min, value));
 }

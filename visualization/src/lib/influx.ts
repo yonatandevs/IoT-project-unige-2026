@@ -47,27 +47,9 @@ function escapeTag(value: string): string {
 type InfluxValue = string | number | boolean | undefined;
 type InfluxRecord = Record<string, InfluxValue>;
 
-const booleanColumns = new Set(["locked", "acknowledged", "acked"]);
-const stringColumns = new Set([
-  "_time",
-  "id",
-  "status",
-  "current_ride",
-  "bike_id",
-  "type",
-  "severity",
-  "alert_id",
-  "message",
-  "source",
-]);
-
-function coerceValue(column: string, value: string): InfluxValue {
-  if (booleanColumns.has(column)) {
+function coerceValue(value: string): InfluxValue {
+  if (["true", "false"].includes(value)) {
     return value === "true";
-  }
-
-  if (stringColumns.has(column)) {
-    return value;
   }
 
   if (value === "" || value === "null") {
@@ -97,7 +79,7 @@ function parseInfluxCsv(csv: string): InfluxRecord[] {
     const record: InfluxRecord = {};
 
     headers.forEach((header, index) => {
-      record[header] = coerceValue(header, values[index] ?? "");
+      record[header] = coerceValue(values[index] ?? "");
     });
 
     if (
