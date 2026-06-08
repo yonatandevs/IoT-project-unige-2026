@@ -18,7 +18,7 @@ type Props = {
   alertActionError: string | null;
   selectedRideId: string | null;
   onSelectRide: (rideId: string) => void;
-  onAcknowledgeAlert: (alertId: string) => void;
+  onAcknowledgeAlert: (bikeId: string, alertId: string) => void;
 };
 
 export function BikeDetails({
@@ -162,7 +162,6 @@ export function BikeDetails({
                 <th>time</th>
                 <th>type</th>
                 <th>severity</th>
-                <th>message</th>
                 <th>acknowledged</th>
                 <th>action</th>
               </tr>
@@ -172,11 +171,11 @@ export function BikeDetails({
                 <tr
                   key={alert.alert_id ?? `${alert._time}-${alert.type ?? "alert"}`}
                   className={alert.acknowledged ? "alert-row acknowledged" : "alert-row unacknowledged"}
+                  title={alert.message ?? ""}
                 >
                   <td>{formatTime(alert._time)}</td>
                   <td>{formatCell(alert.type)}</td>
                   <td>{formatCell(alert.severity)}</td>
-                  <td>{formatCell(alert.message)}</td>
                   <td>
                     <span
                       className={`ack-indicator ${alert.acknowledged ? "ack-indicator--acknowledged" : "ack-indicator--unacknowledged"}`}
@@ -196,7 +195,7 @@ export function BikeDetails({
                         onClick={(event) => {
                           event.stopPropagation();
                           if (alert.alert_id) {
-                            onAcknowledgeAlert(alert.alert_id);
+                            onAcknowledgeAlert(alert.bike_id, alert.alert_id);
                           }
                         }}
                         aria-label={`Acknowledge alert ${alert.alert_id ?? ""}`}
@@ -212,7 +211,7 @@ export function BikeDetails({
               ))}
               {!loadingAlerts && alerts.length === 0 ? (
                 <tr>
-                  <td colSpan={6}>No alerts found for this bike.</td>
+                  <td colSpan={5}>No alerts found for this bike.</td>
                 </tr>
               ) : null}
             </tbody>

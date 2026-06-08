@@ -191,6 +191,21 @@ from(bucket: "${bucket}")
   return (await queryInflux(fluxQuery)) as AlertRow[];
 }
 
+export async function fetchAllBikeAlerts(): Promise<AlertRow[]> {
+  const bucket = getEnv("VITE_INFLUXDB_BUCKET", "bike_data");
+
+  const fluxQuery = `
+from(bucket: "${bucket}")
+  |> range(start: 0)
+  |> filter(fn: (r) => r._measurement == "alert")
+  |> pivot(rowKey: ["_time", "bike_id"], columnKey: ["_field"], valueColumn: "_value")
+  |> keep(columns: ["_time", "bike_id", "type", "severity", "alert_id", "message", "acknowledged"])
+  |> sort(columns: ["_time"], desc: true)
+`;
+
+  return (await queryInflux(fluxQuery)) as AlertRow[];
+}
+
 export async function fetchBikeAlertAcknowledgements(bikeId: string): Promise<AlertAckRow[]> {
   const bucket = getEnv("VITE_INFLUXDB_BUCKET", "bike_data");
   const escapedBikeId = escapeFluxString(bikeId);
@@ -199,6 +214,21 @@ export async function fetchBikeAlertAcknowledgements(bikeId: string): Promise<Al
 from(bucket: "${bucket}")
   |> range(start: 0)
   |> filter(fn: (r) => r._measurement == "alert_ack" and r.bike_id == "${escapedBikeId}")
+  |> pivot(rowKey: ["_time", "bike_id", "alert_id"], columnKey: ["_field"], valueColumn: "_value")
+  |> keep(columns: ["_time", "bike_id", "alert_id", "acked", "source"])
+  |> sort(columns: ["_time"], desc: true)
+`;
+
+  return (await queryInflux(fluxQuery)) as AlertAckRow[];
+}
+
+export async function fetchAllBikeAlertAcknowledgements(): Promise<AlertAckRow[]> {
+  const bucket = getEnv("VITE_INFLUXDB_BUCKET", "bike_data");
+
+  const fluxQuery = `
+from(bucket: "${bucket}")
+  |> range(start: 0)
+  |> filter(fn: (r) => r._measurement == "alert_ack")
   |> pivot(rowKey: ["_time", "bike_id", "alert_id"], columnKey: ["_field"], valueColumn: "_value")
   |> keep(columns: ["_time", "bike_id", "alert_id", "acked", "source"])
   |> sort(columns: ["_time"], desc: true)

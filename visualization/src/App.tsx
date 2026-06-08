@@ -1,11 +1,21 @@
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BikeDetails } from "./components/BikeDetails";
 import { BikeList } from "./components/BikeList";
 import { BikeMap } from "./components/BikeMap";
 import { useBikeDashboard } from "./hooks/useBikeDashboard";
-import { formatTime } from "./utils/format";
+import { formatCell, formatTime } from "./utils/format";
 
 export default function App() {
   const dashboard = useBikeDashboard();
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const notificationWrapRef = useRef<HTMLDivElement | null>(null);
+  const detailPanelRef = useRef<HTMLElement | null>(null);
+
+  const openAlertCount = dashboard.openAlerts.length;
+  const openAlerts = useMemo(
+    () => dashboard.openAlerts,
+    [dashboard.openAlerts]
+  );
 
   const handleSelectBike = (bikeId: string, lat?: number, lng?: number) => {
     dashboard.setSelectedBikeId(bikeId);
@@ -23,8 +33,31 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent) {
+      if (!notificationWrapRef.current) {
+        return;
+      }
+
+      if (!notificationWrapRef.current.contains(event.target as Node)) {
+        setNotificationsOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, []);
+
   const handleSelectRide = (rideId: string) => {
     dashboard.setSelectedRideId(rideId);
+  };
+
+  const handleOpenAlert = (bikeId: string) => {
+    handleSelectBike(bikeId);
+    setNotificationsOpen(false);
+    detailPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   return (
@@ -35,6 +68,57 @@ export default function App() {
         </div>
 
         <div className="topbar-actions">
+          <div className="notification-wrap" ref={notificationWrapRef}>
+            <button
+              type="button"
+              className="icon-button notification-button"
+              onClick={() => setNotificationsOpen((current) => !current)}
+              aria-label={`${openAlertCount} open alerts`}
+              aria-expanded={notificationsOpen}
+              aria-haspopup="true"
+              title="Open alerts"
+            >
+              <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <path d="M8 1.5a4 4 0 0 0-4 4v1.7c0 .7-.2 1.4-.6 2L2.5 11v.5h11V11l-.9-1.8c-.4-.6-.6-1.3-.6-2V5.5a4 4 0 0 0-4-4Zm0 13a1.5 1.5 0 0 0 1.45-1.1h-2.9A1.5 1.5 0 0 0 8 14.5Z" />
+              </svg>
+              {openAlertCount > 0 ? <span className="notification-badge">{openAlertCount}</span> : null}
+            </button>
+
+            {notificationsOpen ? (
+              <div className="notification-panel" role="menu" aria-label="Open alerts">
+                <div className="notification-panel-header">
+                  <strong>Open alerts</strong>
+                  <span>{openAlertCount}</span>
+                </div>
+                <div className="notification-list">
+                  {openAlerts.length > 0 ? (
+                    openAlerts.map((alert) => (
+                      <button
+                        key={alert.alert_id ?? `${alert.bike_id}-${alert._time}`}
+                        type="button"
+                        className="notification-item"
+                        onClick={() => handleOpenAlert(alert.bike_id)}
+                      >
+                        <span
+                          className="notification-dot notification-dot--open"
+                          aria-hidden="true"
+                        />
+                        <span className="notification-item-body">
+                          <strong>{alert.bike_id}</strong>
+                          <span>{formatCell(alert.type)}</span>
+                          <small>{formatCell(alert.message)}</small>
+                          <small>{formatTime(alert._time)}</small>
+                        </span>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="notification-empty">No open alerts.</div>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
           <button type="button" onClick={() => void dashboard.refresh()} disabled={dashboard.loadingLatest}>
             {dashboard.loadingLatest ? "Loading..." : "Refresh Data"}
           </button>
@@ -57,6 +141,7 @@ export default function App() {
         viewState={dashboard.viewState}
         latestRows={dashboard.latestRows}
         selectedBikeId={dashboard.selectedBikeId}
+        openAlertBikeIds={dashboard.openAlertBikeIds}
         rideGeoJson={dashboard.rideGeoJson}
         onViewStateChange={dashboard.setViewState}
         onSelectBike={handleSelectBike}
@@ -70,7 +155,7 @@ export default function App() {
           onSelectBike={(bikeId) => handleSelectBike(bikeId)}
         />
 
-        <aside className="panel detail-panel" aria-label="Bike details">
+        <aside className="panel detail-panel" aria-label="Bike details" ref={detailPanelRef}>
           <BikeDetails
             selectedBike={dashboard.selectedBike}
             selectedRide={dashboard.selectedRide}

@@ -7,6 +7,7 @@ type Props = {
   viewState: ViewState;
   latestRows: BikeRow[];
   selectedBikeId: string | null;
+  openAlertBikeIds: string[];
   rideGeoJson: RideGeoJson;
   onViewStateChange: (viewState: ViewState) => void;
   onSelectBike: (bikeId: string, lat: number, lng: number) => void;
@@ -16,10 +17,13 @@ export function BikeMap({
   viewState,
   latestRows,
   selectedBikeId,
+  openAlertBikeIds,
   rideGeoJson,
   onViewStateChange,
   onSelectBike,
 }: Props) {
+  const openAlertSet = new Set(openAlertBikeIds);
+
   return (
     <section className="panel map-panel" aria-label="Bike position map">
       <div className="map-canvas">
@@ -51,13 +55,14 @@ export function BikeMap({
             }
 
             const isSelected = bike.id === selectedBikeId;
+            const hasOpenAlerts = openAlertSet.has(bike.id);
 
             return (
               <Marker key={bike.id} longitude={bike.lng} latitude={bike.lat} anchor="center">
                 <button
                   type="button"
-                  className={`map-marker${isSelected ? " selected" : ""}`}
-                  aria-label={`Select ${bike.id}`}
+                  className={`map-marker${hasOpenAlerts ? " alert-open" : " alert-clear"}${isSelected ? " selected" : ""}`}
+                  aria-label={`Select ${bike.id}${hasOpenAlerts ? ", has open alerts" : ""}`}
                   title={bike.id}
                   onClick={(event) => {
                     event.stopPropagation();
