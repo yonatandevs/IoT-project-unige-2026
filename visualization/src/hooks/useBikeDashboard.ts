@@ -76,10 +76,22 @@ export function useBikeDashboard() {
     }
   }
 
+  async function getLatestAlerts() {
+    const dateObj = new Date(alertRows[alertRows.length - 1]?._time);
+    dateObj.setMilliseconds(dateObj.getMilliseconds() + 1);
+    const lastAlertTime = dateObj.toISOString();
+    const newAlerts = await fetchAllBikeAlerts(lastAlertTime)
+  }
+
   useEffect(() => {
-    void loadLatestRows();
-    void loadAlertData();
-  }, []);
+    if (lastUpdated === null) {
+      void loadLatestRows();
+      void loadAlertData();
+    }
+    const intervalId = setInterval(getLatestAlerts, 2000);
+
+    return () => clearInterval(intervalId);
+  }, [alertRows]);
 
   useEffect(() => {
     const bikeId = selectedBikeId;

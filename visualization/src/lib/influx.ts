@@ -45,10 +45,10 @@ from(bucket: "${bucket}")
   return queryApi.collectRows<BikeRow>(fluxQuery);
 }
 
-export function fetchAllBikeAlerts(): Promise<AlertRow[]> {
+export function fetchAllBikeAlerts(start = '0'): Promise<AlertRow[]> {
   const fluxQuery = `
 from(bucket: "${bucket}")
-  |> range(start: 0)
+  |> range(start: ${start})
   |> filter(fn: (r) => r._measurement == "alert")
   |> pivot(rowKey: ["_time", "bike_id"], columnKey: ["_field"], valueColumn: "_value")
   |> sort(columns: ["_time"], desc: true)
