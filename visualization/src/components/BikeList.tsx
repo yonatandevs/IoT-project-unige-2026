@@ -1,0 +1,68 @@
+import type { BikeRow } from "../types";
+import { formatBatteryPercent, formatMetric, formatTime } from "../utils/format";
+
+type Props = {
+  rows: BikeRow[];
+  loading: boolean;
+  selectedBikeId: string | null;
+  onSelectBike: (bikeId: string) => void;
+};
+
+export function BikeList({ rows, loading, selectedBikeId, onSelectBike }: Props) {
+  return (
+    <section className="panel list-panel" aria-label="Latest bike list">
+      <div className="panel-heading">
+        <h2>Bikes</h2>
+        <span>{loading ? "Loading" : `${rows.length} rows`}</span>
+      </div>
+
+      <div className="table-wrap compact">
+        <table>
+          <thead>
+            <tr>
+              <th>id</th>
+              <th>status</th>
+              <th>locked</th>
+              <th>battery</th>
+              <th>speed</th>
+              <th>last seen</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const isSelected = row.id === selectedBikeId;
+
+              return (
+                <tr
+                  key={row.id}
+                  className={isSelected ? "selected" : undefined}
+                  onClick={() => onSelectBike(row.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onSelectBike(row.id);
+                    }
+                  }}
+                >
+                  <td>{row.id}</td>
+                  <td>{row.status ?? "—"}</td>
+                  <td>{row.locked ? "true" : "false"}</td>
+                  <td>{formatBatteryPercent(row.battery)}</td>
+                  <td>{formatMetric(row.current_speed, "km/h")}</td>
+                  <td>{formatTime(row._time)}</td>
+                </tr>
+              );
+            })}
+            {!loading && rows.length === 0 ? (
+              <tr>
+                <td colSpan={6}>No bike data found.</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}

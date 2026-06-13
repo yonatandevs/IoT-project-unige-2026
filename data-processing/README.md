@@ -116,4 +116,26 @@ docker compose down                  # stop everything
 docker compose down -v               # stop + wipe all data
 ```
 
+## Demo Data Seeder
+
+Write demo `bike` measurement points directly to InfluxDB using the same
+connection values as `docker-compose.yml`. The seeder also adds `alert`
+measurement rows for some of the bikes.
+
+```bash
+node demo-data/seed-bike-demo.js
+```
+
+Common options:
+
+```bash
+node demo-data/seed-bike-demo.js --bikes 5 --points 240 --interval-seconds 30
+node demo-data/seed-bike-demo.js --dry-run
+```
+
+The script reads `data-processing/.env` first and then falls back to the
+defaults used by the compose file.
+
+## More Info
+
 See [INTEGRATION.md](../INTEGRATION.md) for MQTT payload formats, Flux queries, and testing steps.

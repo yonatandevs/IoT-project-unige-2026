@@ -1,5 +1,34 @@
 # Meetings
 
+## 09.06.2026
+- Current status of each project
+  - What is missing to MVP
+    - Integration between simulation and data processing, we will use only one topic
+  - When is the rest done?
+    - Monday
+- Clarification of data models in MQTT and InfluxDB (`models` folder does not seem to be up to date)
+- Can we already integrate all services?
+  - Common docker compose including all services
+- Next meeting 15.06.2026 10am
+  - What can we finish by then?
+    - Simulation
+      - Get it running and have realistic data sent to MQTT
+      - Alerts happen in a reasonable amount of time after starting simulation
+    - Data-processing
+      - Merge topics to one
+      - Define alerts and conditions
+      - Define parking zones
+    - Visualization
+      - Add parking zones
+      - Add real time notifications
+      - Speed Graph
+      - Heatmap for rides and parking
+      - Tooltip when hovering over bike
+    - Running MVP
+      - Simulation data is send to MQTT
+      - NodeRED processes it
+      - Dashboard fetches data from InfluxDB
+
 ## 26.05.2026
 - Clarification of Service interaction
     - Simulation send bike data to MQTT message broker

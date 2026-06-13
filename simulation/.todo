@@ -1,7 +1,5 @@
-Add simulated RSSI  in telemetry
-Simulate packet loss (drop some MQTT messages)
-Simulate network latency
-Link RSSI to environment
-
-parking zones
-no-go zones
+TODO:
+- Implement packet loss based on RSSI (drop telemetry messages probabilistically)
+- Simulate network latency (delay MQTT publish using Gaussian noise)
+- Add SIMULATE_FALL env variable to trigger fall alarm on demand (for demo/testing)
+- Connect with Node-RED (Woki) for InfluxDB ingestion and Grafana dashboard
