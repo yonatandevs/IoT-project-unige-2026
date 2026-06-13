@@ -220,7 +220,7 @@
         "type": "function",
         "z": "flow-c-tab",
         "name": "Load parking-zones.json",
-        "func": "const fs = require('fs');\nconst path = '/data/parking-zones.json';\n\ntry {\n    const raw = fs.readFileSync(path, 'utf8');\n    const config = JSON.parse(raw);\n    global.set('parkingZones', config.zones);\n    node.log('Loaded ' + config.zones.length + ' parking zones for ' + config.city);\n    msg.payload = config;\n    return msg;\n} catch (e) {\n    node.error('Failed to load parking zones: ' + e.message);\n    return null;\n}",
+        "func": "const fs = global.get('fs');\nconst path = '/data/parking-zones.json';\n\ntry {\n    const raw = fs.readFileSync(path, 'utf8');\n    const config = JSON.parse(raw);\n    global.set('parkingZones', config.zones);\n    node.log('Loaded ' + config.zones.length + ' parking zones for ' + config.city);\n    msg.payload = config;\n    return msg;\n} catch (e) {\n    node.error('Failed to load parking zones: ' + e.message);\n    return null;\n}",
         "outputs": 1,
         "x": 380,
         "y": 240,
