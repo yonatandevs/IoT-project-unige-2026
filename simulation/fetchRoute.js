@@ -1,79 +1,89 @@
 'use strict'
 
-const WAYPOINTS = [
-    { name: 'Porto Antico',       lng: 8.92765, lat: 44.40757 },
-    { name: 'Piazza De Ferrari',  lng: 8.93390, lat: 44.40690 },
+const ROUTES = [
+  [
+    { name: 'Porto Antico',      lng: 8.92765, lat: 44.40757 },
+    { name: 'Piazza De Ferrari', lng: 8.93390, lat: 44.40690 },
+  ],
+  [
+    { name: 'Stazione Principe', lng: 8.92056, lat: 44.41667 },
+    { name: 'Porto Antico',      lng: 8.92765, lat: 44.40757 },
+  ],
+  [
+    { name: 'Piazza De Ferrari', lng: 8.93390, lat: 44.40690 },
+    { name: 'Stazione Brignole', lng: 8.94722, lat: 44.40667 },
+  ],
+  [
+    { name: 'Stazione Brignole', lng: 8.94722, lat: 44.40667 },
+    { name: 'Stadio Marassi',    lng: 8.95250, lat: 44.41639 },
+  ],
+  [
+    { name: 'Stadio Marassi',    lng: 8.95250, lat: 44.41639 },
+    { name: 'Stazione Principe', lng: 8.92056, lat: 44.41667 },
+  ],
 ]
 
-const OSRM_BASE   = 'https://router.project-osrm.org'
-const PROFILE     = 'bike'
-const MAX_POINTS  = 200
-
-async function main() {
-    const coords = WAYPOINTS.map(w => `${w.lng},${w.lat}`).join(';')
-    const url = `${OSRM_BASE}/route/v1/${PROFILE}/${coords}?overview=full&geometries=geojson&steps=false`
-
-    console.error(`Fetching route from OSRM...`)
-    console.error(`  ${url}\n`)
-
-    let data
-    try {
-        const res = await fetch(url)
-        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
-        data = await res.json()
-    } catch (err) {
-        console.error(`ERROR: Could not reach OSRM — ${err.message}`)
-        console.error(`Make sure you are online and try again.`)
-        process.exit(1)
-    }
-
-    if (data.code !== 'Ok' || !data.routes?.length) {
-        console.error(`OSRM returned no route. Response:`, JSON.stringify(data, null, 2))
-        process.exit(1)
-    }
-
-    const route     = data.routes[0]
-    const rawCoords = route.geometry.coordinates
-    const distanceM = route.distance
-    const durationS = route.duration
-
-    console.error(`Route found:`)
-    console.error(`  Distance : ${(distanceM / 1000).toFixed(2)} km`)
-    console.error(`  Duration : ${Math.round(durationS / 60)} min (OSRM estimate)`)
-    console.error(`  Raw pts  : ${rawCoords.length}`)
-
-    const points = subsample(rawCoords, MAX_POINTS)
-    console.error(`  Output pts: ${points.length} (max ${MAX_POINTS})\n`)
-
-    const lines = []
-    for (let i = 0; i < points.length; i += 3) {
-        const chunk = points.slice(i, i + 3)
-        lines.push('  ' + chunk.map(([lng, lat]) => `[${lat.toFixed(5)}, ${lng.toFixed(5)}]`).join(', '))
-    }
-
-    const from = WAYPOINTS[0].name
-    const to   = WAYPOINTS[WAYPOINTS.length - 1].name
-
-    console.log(`const GENOA_ROUTE = [`)
-    console.log(lines.join(',\n'))
-    console.log(`]`)
-    console.log()
-    console.log(`module.exports = {`)
-    console.log(`  GENOA_ROUTE,`)
-    console.log(`}`)
-}
+const OSRM_BASE = 'https://router.project-osrm.org'
+const PROFILE  = 'bike'
+const MAX_POINTS = 200
 
 function subsample(arr, maxLen) {
-    if (arr.length <= maxLen) return arr
-    const result = []
-    for (let i = 0; i < maxLen; i++) {
-        const idx = Math.round(i * (arr.length - 1) / (maxLen - 1))
-        result.push(arr[idx])
+  if (arr.length <= maxLen) return arr
+  const result = []
+  for (let i = 0; i < maxLen; i++) {
+    const idx = Math.round(i * (arr.length - 1) / (maxLen - 1))
+    result.push(arr[idx])
+  }
+  return result
+}
+
+async function fetchRoute(waypoints) {
+  const coords = waypoints.map(w => `${w.lng},${w.lat}`).join(';')
+  const url = `${OSRM_BASE}/route/v1/${PROFILE}/${coords}?overview=full&geometries=geojson&steps=false`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const data = await res.json()
+  if (data.code !== 'Ok' || !data.routes?.length) throw new Error('No route found')
+  const route = data.routes[0]
+  const points = subsample(route.geometry.coordinates, MAX_POINTS)
+  const from = waypoints[0].name
+  const to   = waypoints[waypoints.length - 1].name
+  console.error(`  ${from} → ${to} : ${(route.distance/1000).toFixed(2)}km, ${Math.round(route.duration/60)}min, ${points.length}pts`)
+  return { from, to, points }
+}
+
+async function main() {
+  console.error('Fetching all routes from OSRM...\n')
+  const results = []
+  for (const waypoints of ROUTES) {
+    const route = await fetchRoute(waypoints)
+    results.push(route)
+  }
+
+  console.log('\'use strict\'')
+  console.log('')
+  for (const { from, to, points } of results) {
+    const varName = `ROUTE_${from.replace(/\s+/g, '_').toUpperCase()}_TO_${to.replace(/\s+/g, '_').toUpperCase()}`
+    const lines = []
+    for (let i = 0; i < points.length; i += 3) {
+      const chunk = points.slice(i, i + 3)
+      lines.push('  ' + chunk.map(([lng, lat]) => `[${lat.toFixed(5)}, ${lng.toFixed(5)}]`).join(', '))
     }
-    return result
+    console.log(`const ${varName} = [`)
+    console.log(lines.join(',\n'))
+    console.log(`]`)
+    console.log('')
+  }
+
+  console.log('module.exports = {')
+  for (const { from, to } of results) {
+    const varName = `ROUTE_${from.replace(/\s+/g, '_').toUpperCase()}_TO_${to.replace(/\s+/g, '_').toUpperCase()}`
+    console.log(`  ${varName},`)
+  }
+  console.log('}')
 }
 
 main().catch(err => {
-    console.error('Fatal:', err)
-    process.exit(1)
+  console.error('Fatal:', err)
+  process.exit(1)
 })

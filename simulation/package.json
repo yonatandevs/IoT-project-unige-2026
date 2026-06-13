@@ -10,6 +10,11 @@
     "bike3": "BIKE_ID=bike-ge-003 node simulator.js"
   },
   "dependencies": {
+    "dotenv": "^17.4.2",
     "mqtt": "^5.0.0"
-  }
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
 }
