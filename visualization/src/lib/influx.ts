@@ -75,7 +75,7 @@ export function acknowledgeBikeAlert(bikeId: string, alertId: string): Promise<v
     .tag('bike_id', bikeId)
     .tag('alert_id', alertId)
     .booleanField('acked', true)
-    .tag('source', 'visualization')
+    .stringField('source', 'visualization')
   writeApi.writePoint(point)
   return writeApi.close()
 }

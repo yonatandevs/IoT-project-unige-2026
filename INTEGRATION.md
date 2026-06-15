@@ -327,7 +327,7 @@ mosquitto_pub -h localhost -t "bike/bike-001/imu" -m '{
 }'
 
 # Status (triggers LOW BATTERY ALERT — battery < 15)
-mosquitto_pub -h localhost -t "bike/bike-001/status" -m '{
+mosquitto_pub -h localhost -t "bike/bike-001/telemetry" -m '{
   "battery": 8.2, "locked": false, "status": "rented", "current_ride": "ride-042"
 }'
 

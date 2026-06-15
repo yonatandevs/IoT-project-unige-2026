@@ -1,5 +1,25 @@
 # Meetings
 
+## 15.06.2026
+- Integration
+  - How to start the simulation
+    - `node main.js <mode>`
+  - Where are the zone data
+    - has been added
+- Missing
+  - We need historical data for the heatmap to show relevant information
+- What do we still need till Thursday
+  - clear alerts and definitions
+  - alerts should only be triggered once per bike and category (not have a low battery alert every 5 seconds. Maybe have different severity classes: 15%, 5%, 0%)
+  - Alerts are not all saved to InfluxDB
+  - Connectivity status alert (bike sends no data for 1 minute)
+  - historical data for the heatmap
+    - Should be on the same bike IDs as we have in the simulation
+  - parking zones in map
+  - heatmap (routes & parking)
+  - battery status for last day
+- Last meeting?
+
 ## 09.06.2026
 - Current status of each project
   - What is missing to MVP
