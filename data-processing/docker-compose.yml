@@ -40,6 +40,7 @@ services:
       INFLUXDB_BUCKET: ${INFLUXDB_BUCKET}
     volumes:
       - ./node-red/data:/data
+      - ../shared:/shared:ro
     depends_on:
       - mosquitto
       - influxdb

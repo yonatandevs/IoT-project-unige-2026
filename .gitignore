@@ -150,6 +150,7 @@ data-processing/node-red/data/*
 !data-processing/node-red/data/flows.json
 !data-processing/node-red/data/flows_cred.json
 !data-processing/node-red/data/settings.js
+!data-processing/node-red/data/package.json
 
 # Data processing local env (committed for zero-config dev setup)
 !data-processing/.env
