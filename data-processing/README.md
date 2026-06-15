@@ -16,8 +16,11 @@ data-processing/
     └── data/
         ├── flows.json
         ├── flows_cred.json
-        ├── parking-zones.json
+        ├── package.json
         └── settings.js
+
+shared/                          ← shared across all layers
+└── parking-zones.json
 ```
 
 ## How to run
@@ -36,7 +39,7 @@ Each bike sends a single telemetry message every ~5 seconds:
 
 | Topic | Payload |
 |---|---|
-| `bike/{id}/telemetry` | `{ lat, lng, current_speed, imu_x, imu_y, imu_z, imu_dx, imu_dy, imu_dz, battery, locked, status, current_ride }` |
+| `bike/{id}/telemetry` | `{ id, position: {lat, lng}, current_speed, imu: {x,y,z,dx,dy,dz}, battery, locked, status, current_ride, timestamp, rssi }` |
 | `station/{id}/status` | `{ available_slots, bikes_docked }` |
 | `station/{id}/event` | dock/undock events (not processed yet) |
 
@@ -46,8 +49,8 @@ Flows are in `node-red/data/flows.json` and editable at http://localhost:1880.
 
 | Flow | What it does |
 |---|---|
-| A — Ingest & Store | Subscribes to `bike/+/telemetry` and `station/+/status`, writes everything to InfluxDB |
-| B — Fall Detection | Fires a `fall` alert when `|imu_z| > 25 m/s²` (~2.5g spike) |
+| A — Ingest & Store | Subscribes to `bike/+/telemetry` and `station/+/status`, writes to InfluxDB |
+| B — Fall Detection | Fires a `fall` alert when `\|imu_z\| > 25 m/s²` (~2.5g spike) |
 | C — Parking Violation | Fires a `parking_violation` alert when a bike stops outside authorized zones |
 | D — Battery & Dock | Fires a `low_battery` alert when battery drops below 15% |
 
@@ -57,7 +60,7 @@ Alerts are append-only events in InfluxDB — we never update them.
 
 | Type | Severity | When it fires |
 |---|---|---|
-| `fall` | high | `|imu_z| > 25 m/s²` — sudden vertical impact |
+| `fall` | high | `\|imu_z\| > 25 m/s²` — sudden vertical impact |
 | `parking_violation` | medium | `current_speed < 1` and bike is outside all parking zones |
 | `low_battery` | low | `battery < 15%` |
 
@@ -77,24 +80,35 @@ tags:        { alert_id }
 fields:      { acknowledged_by, note }
 ```
 
-To check if an alert was acknowledged, just look for a matching `alert_id` in `alert_acknowledged`.
+To check if an alert was acknowledged, look for a matching `alert_id` in `alert_acknowledged`.
 
 ## Parking zones
 
-Defined in `node-red/data/parking-zones.json` and loaded into Node-RED on startup. Currently configured for Genoa:
+Defined in [`shared/parking-zones.json`](../shared/parking-zones.json) (shared across simulation, data-processing, and visualization). Mounted read-only into the Node-RED container at `/shared/`.
 
-| Zone | Coordinates | Radius |
-|---|---|---|
-| Porto Antico | 44.4095, 8.9290 | 300 m |
-| Piazza De Ferrari | 44.4072, 8.9345 | 200 m |
-| Stazione Brignole | 44.4153, 8.9425 | 250 m |
-| Stazione Principe | 44.4103, 8.9213 | 250 m |
-| Boccadasse | 44.3960, 8.9635 | 200 m |
-| Università / Via Balbi | 44.4118, 8.9240 | 200 m |
-| Spianata Castelletto | 44.4120, 8.9325 | 150 m |
-| Fiera di Genova | 44.4030, 8.9530 | 300 m |
+| Zone | zone_id | Coordinates | Radius |
+|---|---|---|---|
+| Porto Antico | `zone-porto-antico` | 44.4095, 8.9290 | 300 m |
+| Piazza De Ferrari | `zone-de-ferrari` | 44.4072, 8.9345 | 200 m |
+| Stazione Brignole | `zone-brignole` | 44.4153, 8.9425 | 250 m |
+| Stazione Principe | `zone-principe` | 44.4103, 8.9213 | 250 m |
 
-Edit the JSON file and restart Node-RED to update zones.
+To add/edit zones, update `shared/parking-zones.json` and restart Node-RED:
+
+```bash
+docker compose restart node-red
+```
+
+Zone format:
+
+```json
+{
+    "zone_id": "zone-example",
+    "name": "Display Name",
+    "center": { "lat": 44.0000, "lng": 8.0000 },
+    "radius": 200
+}
+```
 
 ## InfluxDB schema
 
