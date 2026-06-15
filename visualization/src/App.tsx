@@ -1,22 +1,50 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Toaster } from "react-hot-toast";
 import { BikeDetails } from "./components/BikeDetails";
 import { BikeList } from "./components/BikeList";
 import { BikeMap } from "./components/BikeMap";
+import { HeatmapPage } from "./components/HeatmapPage";
 import { useBikeDashboard } from "./hooks/useBikeDashboard";
 import { formatCell, formatTime } from "./utils/format";
-import { Toaster } from "react-hot-toast";
 
-export default function App() {
+function normalizePath(pathname: string) {
+  const trimmed = pathname.replace(/\/+$/, "");
+  return trimmed === "" ? "/" : trimmed;
+}
+
+function usePathname() {
+  const [pathname, setPathname] = useState(() => normalizePath(window.location.pathname));
+
+  useEffect(() => {
+    function handlePopState() {
+      setPathname(normalizePath(window.location.pathname));
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  const navigate = (nextPath: string) => {
+    const normalized = normalizePath(nextPath);
+    if (normalized === pathname) {
+      return;
+    }
+
+    window.history.pushState({}, "", normalized);
+    setPathname(normalized);
+  };
+
+  return { pathname, navigate };
+}
+
+function DashboardScreen({ onNavigateHeatmap }: { onNavigateHeatmap: () => void }) {
   const dashboard = useBikeDashboard();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const notificationWrapRef = useRef<HTMLDivElement | null>(null);
   const detailPanelRef = useRef<HTMLElement | null>(null);
 
   const openAlertCount = dashboard.openAlerts.length;
-  const openAlerts = useMemo(
-    () => dashboard.openAlerts,
-    [dashboard.openAlerts]
-  );
+  const openAlerts = useMemo(() => dashboard.openAlerts, [dashboard.openAlerts]);
 
   const handleSelectBike = (bikeId: string, lat?: number, lng?: number) => {
     dashboard.setSelectedBikeId(bikeId);
@@ -123,6 +151,10 @@ export default function App() {
           <button type="button" onClick={() => void dashboard.refresh()} disabled={dashboard.loadingLatest}>
             {dashboard.loadingLatest ? "Loading..." : "Refresh Data"}
           </button>
+
+          <button type="button" onClick={onNavigateHeatmap}>
+            Heatmap
+          </button>
         </div>
       </header>
 
@@ -173,8 +205,23 @@ export default function App() {
             onAcknowledgeAlert={dashboard.acknowledgeAlert}
           />
         </aside>
-        <Toaster></Toaster>
       </main>
     </div>
+  );
+}
+
+export default function App() {
+  const { pathname, navigate } = usePathname();
+  const isHeatmapRoute = pathname === "/heatmap";
+
+  return (
+    <>
+      {isHeatmapRoute ? (
+        <HeatmapPage onNavigateHome={() => navigate("/")} />
+      ) : (
+        <DashboardScreen onNavigateHeatmap={() => navigate("/heatmap")} />
+      )}
+      <Toaster />
+    </>
   );
 }

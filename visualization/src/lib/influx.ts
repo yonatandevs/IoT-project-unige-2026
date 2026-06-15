@@ -1,4 +1,4 @@
-import type { AlertAckRow, AlertRow, BikeRow } from "../types";
+import type { AlertAckRow, AlertRow, BikeRow, HeatmapMode } from "../types";
 import { InfluxDB, Point } from "@influxdata/influxdb-client";
 
 function getEnv(name: string, fallback = ""): string {
@@ -39,6 +39,25 @@ from(bucket: "${bucket}")
   |> range(start: 0)
   |> filter(fn: (r) => r._measurement == "bike" and r.id == "${escapedBikeId}")
   |> pivot(rowKey: ["_time", "id"], columnKey: ["_field"], valueColumn: "_value")
+  |> sort(columns: ["_time"])
+`;
+
+  return queryApi.collectRows<BikeRow>(fluxQuery);
+}
+
+export function fetchBikeHeatmapRows(mode: HeatmapMode, showAllData: boolean): Promise<BikeRow[]> {
+  const rangeStart = showAllData ? "0" : "-24h";
+  const modeFilter =
+    mode === "ride"
+      ? 'exists r.current_ride and string(v: r.current_ride) != ""'
+      : 'exists r.locked and string(v: r.locked) == "true"';
+
+  const fluxQuery = `
+from(bucket: "${bucket}")
+  |> range(start: ${rangeStart})
+  |> filter(fn: (r) => r._measurement == "bike")
+  |> pivot(rowKey: ["_time", "id"], columnKey: ["_field"], valueColumn: "_value")
+  |> filter(fn: (r) => ${modeFilter} and exists r.lat and exists r.lng)
   |> sort(columns: ["_time"])
 `;
 

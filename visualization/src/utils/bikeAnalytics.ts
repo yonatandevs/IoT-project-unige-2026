@@ -1,5 +1,5 @@
 import type { StyleSpecification } from "maplibre-gl";
-import type { BikeRow } from "../types";
+import type { BikeRow, HeatmapMode } from "../types";
 
 export type RideSummary = {
   id: string;
@@ -58,6 +58,17 @@ export type RideGeoJson =
         type: "Feature";
         properties: { kind: "route" };
         geometry: { type: "LineString"; coordinates: Array<[number, number]> };
+      }>;
+    }
+  | null;
+
+export type HeatmapGeoJson =
+  | {
+      type: "FeatureCollection";
+      features: Array<{
+        type: "Feature";
+        properties: { weight: number };
+        geometry: { type: "Point"; coordinates: [number, number] };
       }>;
     }
   | null;
@@ -186,4 +197,36 @@ export function buildBatterySeries(rows: BikeRow[]) {
     }))
     .filter((point): point is { time: string; battery: number } => point.battery !== null)
     .sort((a, b) => Date.parse(a.time) - Date.parse(b.time));
+}
+
+export function buildHeatmapGeoJson(rows: BikeRow[], mode: HeatmapMode): HeatmapGeoJson {
+  const features = rows
+    .filter((row) => {
+      if (typeof row.lat !== "number" || typeof row.lng !== "number") {
+        return false;
+      }
+
+      if (mode === "ride") {
+        return typeof row.current_ride === "string" && row.current_ride.trim() !== "";
+      } else {
+        return row.locked === true;
+      }
+    })
+    .map((row) => ({
+      type: "Feature" as const,
+      properties: { weight: 1 },
+      geometry: {
+        type: "Point" as const,
+        coordinates: [row.lng, row.lat] as [number, number],
+      },
+    }));
+
+  if (features.length === 0) {
+    return null;
+  }
+
+  return {
+    type: "FeatureCollection",
+    features,
+  };
 }
