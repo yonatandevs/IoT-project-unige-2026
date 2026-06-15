@@ -195,6 +195,7 @@ function DashboardScreen({ onNavigateHeatmap }: { onNavigateHeatmap: () => void 
             rides={dashboard.rides}
             alerts={dashboard.alerts}
             batterySeries={dashboard.batterySeries}
+            speedSeries={dashboard.speedSeries}
             loadingHistory={dashboard.loadingHistory}
             loadingAlerts={dashboard.loadingAlerts}
             detailError={dashboard.detailError}

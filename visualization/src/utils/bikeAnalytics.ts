@@ -258,6 +258,16 @@ export function buildBatterySeries(rows: BikeRow[]) {
     .sort((a, b) => Date.parse(a.time) - Date.parse(b.time));
 }
 
+export function buildSpeedSeries(rows: BikeRow[]) {
+  return rows
+    .map((row) => ({
+      time: row._time,
+      speed: typeof row.current_speed === "number" ? row.current_speed : null,
+    }))
+    .filter((point): point is { time: string; speed: number } => point.speed !== null)
+    .sort((a, b) => Date.parse(a.time) - Date.parse(b.time));
+}
+
 export function buildHeatmapGeoJson(rows: BikeRow[], mode: HeatmapMode): HeatmapGeoJson {
   const features = rows
     .filter((row) => {

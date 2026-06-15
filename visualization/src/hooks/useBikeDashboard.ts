@@ -11,6 +11,7 @@ import {
   DEFAULT_VIEW_STATE,
   buildBatterySeries,
   buildRideGeoJson,
+  buildSpeedSeries,
   getViewForCoordinates,
   getViewForRows,
   summarizeRides,
@@ -180,11 +181,20 @@ export function useBikeDashboard() {
     [latestRows, selectedBikeId]
   );
   const rides = useMemo(() => summarizeRides(historyRows), [historyRows]);
+  const recentHistoryRows = useMemo(() => {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+
+    return historyRows.filter((row) => {
+      const timestamp = Date.parse(row._time);
+      return Number.isFinite(timestamp) && timestamp >= cutoff;
+    });
+  }, [historyRows]);
   const selectedRide = useMemo(
     () => rides.find((ride) => ride.id === selectedRideId) ?? null,
     [rides, selectedRideId]
   );
-  const batterySeries = useMemo(() => buildBatterySeries(historyRows), [historyRows]);
+  const batterySeries = useMemo(() => buildBatterySeries(recentHistoryRows), [recentHistoryRows]);
+  const speedSeries = useMemo(() => buildSpeedSeries(recentHistoryRows), [recentHistoryRows]);
   const rideGeoJson = useMemo(() => buildRideGeoJson(selectedRide), [selectedRide]);
   const alerts = useMemo(() => {
     const acknowledgedIds = new Set(
@@ -235,6 +245,7 @@ export function useBikeDashboard() {
     selectedRide,
     rides,
     batterySeries,
+    speedSeries,
     alerts: selectedBikeAlerts,
     openAlerts,
     openAlertBikeIds,

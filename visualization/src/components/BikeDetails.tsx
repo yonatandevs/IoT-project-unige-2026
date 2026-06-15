@@ -1,5 +1,6 @@
 import type { BikeRow } from "../types";
 import { BatteryChart } from "./BatteryChart";
+import { SpeedChart } from "./SpeedChart";
 import { bikeColumns } from "../types";
 import {
   formatBatteryPercent,
@@ -19,6 +20,7 @@ type Props = {
   rides: RideSummary[];
   alerts: AlertRow[];
   batterySeries: Array<{ time: string; battery: number }>;
+  speedSeries: Array<{ time: string; speed: number }>;
   loadingHistory: boolean;
   loadingAlerts: boolean;
   detailError: string | null;
@@ -35,6 +37,7 @@ export function BikeDetails({
   rides,
   alerts,
   batterySeries,
+  speedSeries,
   loadingHistory,
   loadingAlerts,
   detailError,
@@ -233,6 +236,14 @@ export function BikeDetails({
           <span>{loadingHistory ? "Loading" : `${batterySeries.length} points`}</span>
         </div>
         <BatteryChart series={batterySeries} />
+      </section>
+
+      <section className="chart-panel">
+        <div className="panel-heading chart-heading">
+          <h3>Current speed over time</h3>
+          <span>{loadingHistory ? "Loading" : `${speedSeries.length} points`}</span>
+        </div>
+        <SpeedChart series={speedSeries} />
       </section>
 
       <section className="detail-table">
