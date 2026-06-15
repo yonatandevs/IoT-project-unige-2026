@@ -17,6 +17,10 @@ export interface BikeRow {
   [key: string]: string | number | boolean | undefined;
 }
 
+export type HeatmapMode = "ride" | "parking";
+
+export type HeatmapTimeRange = "24h" | "all";
+
 export interface AlertRow {
   _time: string;
   bike_id: string;

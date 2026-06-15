@@ -11,6 +11,7 @@ import {
   DEFAULT_VIEW_STATE,
   buildBatterySeries,
   buildRideGeoJson,
+  buildSpeedSeries,
   getViewForCoordinates,
   getViewForRows,
   summarizeRides,
@@ -78,9 +79,14 @@ export function useBikeDashboard() {
   }
 
   async function getLatestAlerts() {
-    const dateObj = new Date(alertRows[alertRows.length - 1]?._time);
-    dateObj.setMilliseconds(dateObj.getMilliseconds() + 1);
-    const lastAlertTime = dateObj.toISOString();
+    let lastAlertTime = '0'
+    if (alertRows.length > 0) {
+      const dateObj = new Date(alertRows[alertRows.length - 1]?._time);
+      dateObj.setMilliseconds(dateObj.getMilliseconds() + 1);
+      lastAlertTime = dateObj.toISOString();
+
+    }
+
     const newAlerts = await fetchAllBikeAlerts(lastAlertTime)
     newAlerts.forEach(alert => toast(`New alert for ${alert.bike_id}: ${alert.message}`))
     setAlertRows(current => [...current, ...newAlerts])
@@ -175,11 +181,20 @@ export function useBikeDashboard() {
     [latestRows, selectedBikeId]
   );
   const rides = useMemo(() => summarizeRides(historyRows), [historyRows]);
+  const recentHistoryRows = useMemo(() => {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+
+    return historyRows.filter((row) => {
+      const timestamp = Date.parse(row._time);
+      return Number.isFinite(timestamp) && timestamp >= cutoff;
+    });
+  }, [historyRows]);
   const selectedRide = useMemo(
     () => rides.find((ride) => ride.id === selectedRideId) ?? null,
     [rides, selectedRideId]
   );
-  const batterySeries = useMemo(() => buildBatterySeries(historyRows), [historyRows]);
+  const batterySeries = useMemo(() => buildBatterySeries(recentHistoryRows), [recentHistoryRows]);
+  const speedSeries = useMemo(() => buildSpeedSeries(recentHistoryRows), [recentHistoryRows]);
   const rideGeoJson = useMemo(() => buildRideGeoJson(selectedRide), [selectedRide]);
   const alerts = useMemo(() => {
     const acknowledgedIds = new Set(
@@ -230,6 +245,7 @@ export function useBikeDashboard() {
     selectedRide,
     rides,
     batterySeries,
+    speedSeries,
     alerts: selectedBikeAlerts,
     openAlerts,
     openAlertBikeIds,
