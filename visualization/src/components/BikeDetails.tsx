@@ -1,7 +1,15 @@
 import type { BikeRow } from "../types";
 import { BatteryChart } from "./BatteryChart";
 import { bikeColumns } from "../types";
-import { formatBatteryPercent, formatCell, formatDuration, formatMetric, formatTime } from "../utils/format";
+import {
+  formatBatteryPercent,
+  formatCell,
+  formatClockTime,
+  formatDateOnly,
+  formatDuration,
+  formatMetric,
+  formatTime,
+} from "../utils/format";
 import type { AlertRow } from "../types";
 import type { RideSummary } from "../utils/bikeAnalytics";
 
@@ -105,12 +113,12 @@ export function BikeDetails({
           <table>
             <thead>
               <tr>
-                <th>ride</th>
+                <th>date</th>
+                <th>start</th>
+                <th>end</th>
                 <th>duration</th>
                 <th>avg speed</th>
                 <th>max speed</th>
-                <th>start</th>
-                <th>end</th>
               </tr>
             </thead>
             <tbody>
@@ -131,12 +139,12 @@ export function BikeDetails({
                       }
                     }}
                   >
-                    <td>{ride.id}</td>
+                    <td title={formatDateOnly(ride.startTime)}>{formatDateOnly(ride.startTime)}</td>
+                    <td title={formatTime(ride.startTime)}>{formatClockTime(ride.startTime)}</td>
+                    <td title={formatTime(ride.endTime)}>{formatClockTime(ride.endTime)}</td>
                     <td>{formatDuration(ride.durationMs)}</td>
                     <td>{formatMetric(ride.averageSpeed, "km/h")}</td>
                     <td>{formatMetric(ride.maxSpeed, "km/h")}</td>
-                    <td>{formatTime(ride.startTime)}</td>
-                    <td>{formatTime(ride.endTime)}</td>
                   </tr>
                 );
               })}
