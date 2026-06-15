@@ -20,11 +20,12 @@ const ALL_ROUTES = [
   ROUTE_STADIO_MARASSI_TO_STAZIONE_PRINCIPE,
 ]
 
+const SCENARIO = process.argv[2] || "normal"
+
 const BIKE_ID = `bike-ge-${randomUUID().slice(0, 6)}`
 const BROKER_URL = process.env.BROKER_URL
 const TICK_MS = parseInt(process.env.TICK_MS)
-const TOPIC_TELEMETRY = `bikes/genoa/${BIKE_ID}/telemetry`
-const TOPIC_ALARM = `bikes/genoa/${BIKE_ID}/alarm`
+const TOPIC_TELEMETRY = `bike/${BIKE_ID}/telemetry`
 const clientId = `bike-${randomUUID()}`
 
 const MQTT_OPTS = {
@@ -33,7 +34,6 @@ const MQTT_OPTS = {
   reconnectPeriod: 5000,
 }
 const QOS_TELEMETRY = { qos: 0 }
-const QOS_ALARM = { qos: 1, retain: true }
 
 function findClosestRoute(currentPos, routes) {
   let bestRoute = null
@@ -76,6 +76,7 @@ async function main() {
   const sim = new BikeSimulator(
     BIKE_ID,
     ROUTE_PORTO_ANTICO_TO_PIAZZA_DE_FERRARI.slice(0, 15),
+    SCENARIO,
   )
   const mqttClient = mqtt.connect(BROKER_URL, MQTT_OPTS)
 
@@ -100,6 +101,7 @@ async function main() {
     })
 
     sim.on("telemetry", ({ payload }) => {
+      console.log(JSON.stringify(payload, null, 2))
       mqttClient.publish(
         TOPIC_TELEMETRY,
         JSON.stringify(payload),
@@ -108,10 +110,6 @@ async function main() {
           if (err) console.error(`Failed to publish telemetry: ${err.message}`)
         },
       )
-    })
-
-    sim.on("alarm", (data) => {
-      mqttClient.publish(TOPIC_ALARM, JSON.stringify(data), QOS_ALARM)
     })
 
     attachRideLifecycle(sim)

@@ -1,8 +1,8 @@
 "use strict"
-const { time } = require("console")
 const { randomUUID } = require("crypto")
 const { EventEmitter } = require("events")
 const { haversineDistance } = require("./utils")
+
 /**
  * Generates a random number following a Gaussian (normal) distribution.
  * @param {number} mean - The center value (average speed we want)
@@ -11,12 +11,8 @@ const { haversineDistance } = require("./utils")
  */
 function gaussianNoise(mean, standardDeviation) {
   let randomA, randomB
-  do {
-    randomA = Math.random()
-  } while (randomA === 0)
-  do {
-    randomB = Math.random()
-  } while (randomB === 0)
+  do { randomA = Math.random() } while (randomA === 0)
+  do { randomB = Math.random() } while (randomB === 0)
   return (
     mean +
     standardDeviation *
@@ -30,7 +26,6 @@ function gaussianNoise(mean, standardDeviation) {
  * Waypoints are consumed one by one as the simulation progresses.
  * Call reset() to restart the route from the beginning.
  */
-
 class GPSRoute {
   constructor(waypoints) {
     this.waypoints = waypoints
@@ -58,9 +53,7 @@ class GPSRoute {
   }
 
   advance() {
-    if (!this.isFinished) {
-      return this.index++
-    }
+    if (!this.isFinished) return this.index++
   }
 
   reset() {
@@ -68,6 +61,9 @@ class GPSRoute {
   }
 }
 
+/**
+ * Produces physically coherent IMU readings.
+ */
 class IMUModel {
   compute({ speedMs, isRiding }) {
     if (!isRiding) {
@@ -79,24 +75,21 @@ class IMUModel {
         dy: gaussianNoise(0, 0.05),
         dz: gaussianNoise(0, 0.03),
       }
-    } else {
-      return {
-        x: gaussianNoise(0, 0.15),
-        y: gaussianNoise(0, 0.1),
-        z: gaussianNoise(9.8, 0.1 + speedMs * 0.02),
-        dx: gaussianNoise(0, 0.05),
-        dy: gaussianNoise(0, 0.05),
-        dz: gaussianNoise(0, 0.03),
-      }
+    }
+    return {
+      x: gaussianNoise(0, 0.15),
+      y: gaussianNoise(0, 0.1),
+      z: gaussianNoise(9.8, 0.1 + speedMs * 0.02),
+      dx: gaussianNoise(0, 0.05),
+      dy: gaussianNoise(0, 0.05),
+      dz: gaussianNoise(0, 0.03),
     }
   }
 }
 
 /**
- * Simulates a bike ride along a predefined GPS route.
- * Emits "telemetry" events at each simulation tick with the current bike state.
+ * Holds all mutable simulation state for a single bike.
  */
-
 class BikeState {
   constructor(id, waypoints) {
     this.id = id
@@ -129,47 +122,22 @@ class BikeState {
 }
 
 /**
- * Detects alarm conditions based on the bike state.
+ * Physics-driven e-bike simulator.
+ * Supports scenario injection for demo/testing purposes.
+ *
+ * Scenarios:
+ *   normal      — standard simulation
+ *   fall        — injects fall IMU values at tick 10
+ *   low_battery — forces battery to 12% at tick 1
  */
-
-class AlarmDetector {
-  check(bike) {
-    const alarms = []
-    if (bike.battery <= 10 && bike.status === "rented") {
-      alarms.push("low_battery")
-    }
-    if (
-      bike.status === "rented" &&
-      bike.locked === false &&
-      bike.current_speed > 25
-    ) {
-      alarms.push("dangerous_acceleration_or_crash")
-    }
-    const { x, y, z } = bike.imu
-
-    if (bike.locked && bike.status === "available") {
-      if (z < 3 && (Math.abs(x) > 7 || Math.abs(y) > 7)) {
-        alarms.push("tamper_detected_while_parked")
-      }
-    }
-
-    if (!bike.locked && bike.status === "rented") {
-      if (z < 3 && (Math.abs(x) > 7 || Math.abs(y) > 7)) {
-        alarms.push("fall_detected")
-      }
-    }
-
-    return alarms
-  }
-}
-
 class BikeSimulator extends EventEmitter {
-  constructor(id, waypoints) {
+  constructor(id, waypoints, scenario = 'normal') {
     super()
     this.id = id
     this.state = new BikeState(id, waypoints)
-    this.alarmDetector = new AlarmDetector()
     this.imuModel = new IMUModel()
+    this._scenario = scenario
+    this._tickCount = 0
   }
 
   startRide(route = null) {
@@ -237,14 +205,13 @@ class BikeSimulator extends EventEmitter {
           this.state.route.advance()
         } else {
           const fraction = metersLeft / distToWaypoint
-          this.state.position.lat +=
-            fraction * (waypoint.lat - this.state.position.lat)
-          this.state.position.lng +=
-            fraction * (waypoint.lng - this.state.position.lng)
+          this.state.position.lat += fraction * (waypoint.lat - this.state.position.lat)
+          this.state.position.lng += fraction * (waypoint.lng - this.state.position.lng)
           metersLeft = 0
         }
       }
 
+      // Assume 100% battery allows for 50km.
       const batteryDrain = (distance / 50000) * 100
       this.state.battery = Math.max(0, this.state.battery - batteryDrain)
     }
@@ -256,20 +223,22 @@ class BikeSimulator extends EventEmitter {
     })
     this.state.rssi = Math.round(gaussianNoise(-65, 10))
 
-    this.alarmDetector.check(this.state.toPayload()).forEach((alarm) => {
-      this.emit("alarm", {
-        bikeId: this.id,
-        alarm,
-        position: this.state.position,
-        locked: this.state.locked,
-        timestamp: this.state.timestamp,
-      })
-    })
+    // Increment tick counter
+    this._tickCount++
+
+    // Scenario injection
+    if (this._scenario === 'fall' && this._tickCount === 10) {
+      console.log('[SCENARIO] Injecting fall event')
+      this.state.imu = { x: 8.5, y: 0.2, z: 1.1, dx: 0, dy: 0, dz: 0 }
+    }
+
+    if (this._scenario === 'low_battery' && this._tickCount === 1) {
+      console.log('[SCENARIO] Injecting low battery')
+      this.state.battery = 15
+    }
 
     this.emit("telemetry", { payload: this.state.toPayload() })
   }
 }
 
-module.exports = {
-  BikeSimulator,
-}
+module.exports = { BikeSimulator }
