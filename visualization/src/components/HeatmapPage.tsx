@@ -163,7 +163,7 @@ export function HeatmapPage({ onNavigateHome }: Props) {
                   id="heatmap-layer"
                   type="heatmap"
                   paint={{
-                    "heatmap-weight": ["interpolate", ["linear"], ["get", "weight"], 0, 0, 1, 1],
+                    "heatmap-weight": ["interpolate", ["linear"], ["get", "weight"], 0, 0, 1, 0.05],
                     "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 12, 2, 16, 3],
                     "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 3, 12, 20, 16, 32],
                     "heatmap-opacity": 0.9,
