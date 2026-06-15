@@ -1,6 +1,18 @@
-import MapGL, { Layer, Marker, NavigationControl, Source } from "react-map-gl/maplibre";
+import MapGL, {
+  Layer,
+  Marker,
+  NavigationControl,
+  Popup,
+  Source,
+} from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { OSM_STYLE, type RideGeoJson, type ViewState } from "../utils/bikeAnalytics";
+import { useMemo, useState } from "react";
+import {
+  OSM_STYLE,
+  buildParkingZoneGeoJson,
+  type RideGeoJson,
+  type ViewState,
+} from "../utils/bikeAnalytics";
 import type { BikeRow } from "../types";
 
 type Props = {
@@ -23,6 +35,9 @@ export function BikeMap({
   onSelectBike,
 }: Props) {
   const openAlertSet = new Set(openAlertBikeIds);
+  const parkingZoneGeoJson = useMemo(() => buildParkingZoneGeoJson(), []);
+  const [hoveredZoneName, setHoveredZoneName] = useState<string | null>(null);
+  const [hoverLngLat, setHoverLngLat] = useState<{ lng: number; lat: number } | null>(null);
 
   return (
     <section className="panel map-panel" aria-label="Bike position map">
@@ -30,9 +45,50 @@ export function BikeMap({
         <MapGL
           {...viewState}
           style={{ width: "100%", height: "100%" }}
+          interactiveLayerIds={["parking-zones-fill"]}
           onMove={(event) => onViewStateChange(event.viewState)}
+          onMouseMove={(event) => {
+            const feature = event.features?.find(
+              (value) => value.layer?.id === "parking-zones-fill"
+            );
+
+            if (feature && typeof feature.properties?.name === "string") {
+              setHoveredZoneName(feature.properties.name);
+              setHoverLngLat(event.lngLat);
+              return;
+            }
+
+            setHoveredZoneName(null);
+            setHoverLngLat(null);
+          }}
+          onMouseLeave={() => {
+            setHoveredZoneName(null);
+            setHoverLngLat(null);
+          }}
           mapStyle={OSM_STYLE}
         >
+          {parkingZoneGeoJson ? (
+            <Source id="parking-zones" type="geojson" data={parkingZoneGeoJson}>
+              <Layer
+                id="parking-zones-fill"
+                type="fill"
+                paint={{
+                  "fill-color": "#a7d7a1",
+                  "fill-opacity": 0.18,
+                }}
+              />
+              <Layer
+                id="parking-zones-outline"
+                type="line"
+                paint={{
+                  "line-color": "#7fbf7a",
+                  "line-width": 2,
+                  "line-opacity": 0.45,
+                }}
+              />
+            </Source>
+          ) : null}
+
           {rideGeoJson ? (
             <Source id="ride-route" type="geojson" data={rideGeoJson}>
               <Layer
@@ -45,6 +101,20 @@ export function BikeMap({
                 }}
               />
             </Source>
+          ) : null}
+
+          {hoveredZoneName && hoverLngLat ? (
+            <Popup
+              longitude={hoverLngLat.lng}
+              latitude={hoverLngLat.lat}
+              closeButton={false}
+              closeOnClick={false}
+              anchor="top"
+              offset={12}
+              className="parking-zone-tooltip"
+            >
+              {hoveredZoneName}
+            </Popup>
           ) : null}
 
           <NavigationControl position="top-right" />

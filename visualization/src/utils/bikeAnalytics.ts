@@ -1,5 +1,6 @@
 import type { StyleSpecification } from "maplibre-gl";
 import type { BikeRow, HeatmapMode } from "../types";
+import parkingZonesConfig from "../../../shared/parking-zones.json";
 
 export type RideSummary = {
   id: string;
@@ -72,6 +73,64 @@ export type HeatmapGeoJson =
       }>;
     }
   | null;
+
+type ParkingZone = {
+  zone_id: string;
+  name: string;
+  center: { lat: number; lng: number };
+  radius: number;
+};
+
+type ParkingZoneConfig = {
+  city: string;
+  zones: ParkingZone[];
+};
+
+type ParkingZoneGeoJson =
+  | {
+      type: "FeatureCollection";
+      features: Array<{
+        type: "Feature";
+        properties: { zone_id: string; name: string; radius: number };
+        geometry: { type: "Polygon"; coordinates: Array<Array<[number, number]>> };
+      }>;
+    }
+  | null;
+
+const parkingZones = parkingZonesConfig as ParkingZoneConfig;
+
+function buildCircleCoordinates(
+  center: { lat: number; lng: number },
+  radiusMeters: number,
+  steps = 64
+): Array<[number, number]> {
+  const earthRadiusMeters = 6_371_000;
+  const coordinates: Array<[number, number]> = [];
+  const latRad = (center.lat * Math.PI) / 180;
+  const lngRad = (center.lng * Math.PI) / 180;
+  const angularDistance = radiusMeters / earthRadiusMeters;
+  const sinLat = Math.sin(latRad);
+  const cosLat = Math.cos(latRad);
+  const sinDistance = Math.sin(angularDistance);
+  const cosDistance = Math.cos(angularDistance);
+
+  for (let index = 0; index <= steps; index += 1) {
+    const bearing = (2 * Math.PI * index) / steps;
+    const nextLat = Math.asin(
+      sinLat * cosDistance + cosLat * sinDistance * Math.cos(bearing)
+    );
+    const nextLng =
+      lngRad +
+      Math.atan2(
+        Math.sin(bearing) * sinDistance * cosLat,
+        cosDistance - sinLat * Math.sin(nextLat)
+      );
+
+    coordinates.push([(nextLng * 180) / Math.PI, (nextLat * 180) / Math.PI]);
+  }
+
+  return coordinates;
+}
 
 export function getViewForRows(rows: BikeRow[], fallback: ViewState): ViewState {
   const coordinates = rows
@@ -218,6 +277,38 @@ export function buildHeatmapGeoJson(rows: BikeRow[], mode: HeatmapMode): Heatmap
       geometry: {
         type: "Point" as const,
         coordinates: [row.lng, row.lat] as [number, number],
+      },
+    }));
+
+  if (features.length === 0) {
+    return null;
+  }
+
+  return {
+    type: "FeatureCollection",
+    features,
+  };
+}
+
+export function buildParkingZoneGeoJson(): ParkingZoneGeoJson {
+  const features = parkingZones.zones
+    .filter(
+      (zone) =>
+        typeof zone.center?.lat === "number" &&
+        typeof zone.center?.lng === "number" &&
+        typeof zone.radius === "number" &&
+        Number.isFinite(zone.radius)
+    )
+    .map((zone) => ({
+      type: "Feature" as const,
+      properties: {
+        zone_id: zone.zone_id,
+        name: zone.name,
+        radius: zone.radius,
+      },
+      geometry: {
+        type: "Polygon" as const,
+        coordinates: [buildCircleCoordinates(zone.center, zone.radius)],
       },
     }));
 
