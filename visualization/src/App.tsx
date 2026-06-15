@@ -4,6 +4,7 @@ import { BikeList } from "./components/BikeList";
 import { BikeMap } from "./components/BikeMap";
 import { useBikeDashboard } from "./hooks/useBikeDashboard";
 import { formatCell, formatTime } from "./utils/format";
+import { Toaster } from "react-hot-toast";
 
 export default function App() {
   const dashboard = useBikeDashboard();
@@ -172,6 +173,7 @@ export default function App() {
             onAcknowledgeAlert={dashboard.acknowledgeAlert}
           />
         </aside>
+        <Toaster></Toaster>
       </main>
     </div>
   );

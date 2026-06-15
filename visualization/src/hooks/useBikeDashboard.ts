@@ -16,6 +16,7 @@ import {
   summarizeRides,
   type ViewState,
 } from "../utils/bikeAnalytics";
+import toast from "react-hot-toast";
 
 export function useBikeDashboard() {
   const [latestRows, setLatestRows] = useState<BikeRow[]>([]);
@@ -76,10 +77,24 @@ export function useBikeDashboard() {
     }
   }
 
+  async function getLatestAlerts() {
+    const dateObj = new Date(alertRows[alertRows.length - 1]?._time);
+    dateObj.setMilliseconds(dateObj.getMilliseconds() + 1);
+    const lastAlertTime = dateObj.toISOString();
+    const newAlerts = await fetchAllBikeAlerts(lastAlertTime)
+    newAlerts.forEach(alert => toast(`New alert for ${alert.bike_id}: ${alert.message}`))
+    setAlertRows(current => [...current, ...newAlerts])
+  }
+
   useEffect(() => {
-    void loadLatestRows();
-    void loadAlertData();
-  }, []);
+    if (lastUpdated === null) {
+      void loadLatestRows();
+      void loadAlertData();
+    }
+    const intervalId = setInterval(getLatestAlerts, 2000);
+
+    return () => clearInterval(intervalId);
+  }, [alertRows]);
 
   useEffect(() => {
     const bikeId = selectedBikeId;
