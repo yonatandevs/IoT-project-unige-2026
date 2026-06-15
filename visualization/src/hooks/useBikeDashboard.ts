@@ -78,9 +78,14 @@ export function useBikeDashboard() {
   }
 
   async function getLatestAlerts() {
-    const dateObj = new Date(alertRows[alertRows.length - 1]?._time);
-    dateObj.setMilliseconds(dateObj.getMilliseconds() + 1);
-    const lastAlertTime = dateObj.toISOString();
+    let lastAlertTime = '0'
+    if (alertRows.length > 0) {
+      const dateObj = new Date(alertRows[alertRows.length - 1]?._time);
+      dateObj.setMilliseconds(dateObj.getMilliseconds() + 1);
+      lastAlertTime = dateObj.toISOString();
+
+    }
+
     const newAlerts = await fetchAllBikeAlerts(lastAlertTime)
     newAlerts.forEach(alert => toast(`New alert for ${alert.bike_id}: ${alert.message}`))
     setAlertRows(current => [...current, ...newAlerts])
