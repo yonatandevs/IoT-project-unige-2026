@@ -17,10 +17,10 @@ function escapeFluxString(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-export function fetchLatestBikeRows(): Promise<BikeRow[]> {
+export function fetchLatestBikeRows(start = '0'): Promise<BikeRow[]> {
   const fluxQuery = `
 from(bucket: "${bucket}")
-  |> range(start: 0)
+  |> range(start: ${start})
   |> filter(fn: (r) => r._measurement == "bike")
   |> group(columns: ["id", "_field"])
   |> last()

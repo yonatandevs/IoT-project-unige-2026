@@ -78,18 +78,34 @@ export function useBikeDashboard() {
     }
   }
 
-  async function getLatestAlerts() {
-    let lastAlertTime = '0'
-    if (alertRows.length > 0) {
-      const dateObj = new Date(alertRows[alertRows.length - 1]?._time);
+  function getLastTimestamp(data: any[]) {
+    let lastTimestamp = '0'
+    if (data.length > 0) {
+      const dateObj = new Date(data[data.length - 1]?._time);
       dateObj.setMilliseconds(dateObj.getMilliseconds() + 1);
-      lastAlertTime = dateObj.toISOString();
-
+      lastTimestamp = dateObj.toISOString();
     }
+    return lastTimestamp;
+  }
 
+  async function getLatestData() {
+    const lastAlertTime = getLastTimestamp(alertRows);
     const newAlerts = await fetchAllBikeAlerts(lastAlertTime)
     newAlerts.forEach(alert => toast(`New alert for ${alert.bike_id}: ${alert.message}`))
     setAlertRows(current => [...current, ...newAlerts])
+
+    const lastBikeRowTime = getLastTimestamp(latestRows)
+    const newBikeRows = await fetchLatestBikeRows(lastBikeRowTime)
+    if (newBikeRows.length > 0) {
+      const filteredCurrent = latestRows.filter(({id }) => !newBikeRows.find((bike) => bike.id === id))
+      const affectingCurrent = newBikeRows.filter(({id}) =>  selectedBikeId === id)
+      if (affectingCurrent.length > 0) {
+        setHistoryRows((current) => [...current, ...affectingCurrent ])
+      }
+      setLatestRows(() => [...newBikeRows, ...filteredCurrent])
+      setLastUpdated(new Date().toISOString());
+    }
+
   }
 
   useEffect(() => {
@@ -97,10 +113,10 @@ export function useBikeDashboard() {
       void loadLatestRows();
       void loadAlertData();
     }
-    const intervalId = setInterval(getLatestAlerts, 2000);
+    const intervalId = setInterval(getLatestData, 2000);
 
     return () => clearInterval(intervalId);
-  }, [alertRows]);
+  }, [alertRows, selectedBikeId]);
 
   useEffect(() => {
     const bikeId = selectedBikeId;
@@ -235,7 +251,7 @@ export function useBikeDashboard() {
     }
 
     setViewState((current) => getViewForCoordinates(selectedRide.routePoints, current));
-  }, [selectedRide]);
+  }, [selectedRideId]);
 
   return {
     latestRows,
