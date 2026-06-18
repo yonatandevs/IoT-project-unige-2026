@@ -2,13 +2,16 @@
 require("dotenv").config()
 const mqtt = require("mqtt")
 const { BikeSimulator } = require("./BikeSimulator")
-const { haversineDistance } = require("./utils")
+const { haversineDistance, gaussianNoise, exponentialDelay } = require("./utils")
 const {
   ROUTE_PORTO_ANTICO_TO_PIAZZA_DE_FERRARI,
   ROUTE_STAZIONE_PRINCIPE_TO_PORTO_ANTICO,
   ROUTE_PIAZZA_DE_FERRARI_TO_STAZIONE_BRIGNOLE,
   ROUTE_STAZIONE_BRIGNOLE_TO_STADIO_MARASSI,
   ROUTE_STADIO_MARASSI_TO_STAZIONE_PRINCIPE,
+  ROUTE_STAZIONE_BRIGNOLE_TO_OSPEDALE_SAN_MARTINO,
+  ROUTE_PORTO_ANTICO_TO_STAZIONE_SAMPIERDARENA,
+  ROUTE_STAZIONE_SAMPIERDARENA_TO_FLIXBUS_GENOVA,
 } = require("./road_routes")
 const { randomUUID } = require("crypto")
 
@@ -18,11 +21,13 @@ const ALL_ROUTES = [
   ROUTE_PIAZZA_DE_FERRARI_TO_STAZIONE_BRIGNOLE,
   ROUTE_STAZIONE_BRIGNOLE_TO_STADIO_MARASSI,
   ROUTE_STADIO_MARASSI_TO_STAZIONE_PRINCIPE,
+  ROUTE_STAZIONE_BRIGNOLE_TO_OSPEDALE_SAN_MARTINO,
+  ROUTE_PORTO_ANTICO_TO_STAZIONE_SAMPIERDARENA,
+  ROUTE_STAZIONE_SAMPIERDARENA_TO_FLIXBUS_GENOVA,
 ]
 
 const SCENARIO = process.argv[2] || "normal"
-
-const BIKE_ID = `bike-ge-${randomUUID().slice(0, 6)}`
+const BIKE_ID = process.argv[3] || `bike-ge-${randomUUID().slice(0, 6)}`
 const BROKER_URL = process.env.BROKER_URL
 const TICK_MS = parseInt(process.env.TICK_MS)
 const TOPIC_TELEMETRY = `bike/${BIKE_ID}/telemetry`
@@ -35,15 +40,20 @@ const MQTT_OPTS = {
 }
 const QOS_TELEMETRY = { qos: 0 }
 
+function getNetworkLatency(rssi) {
+  if (rssi >= -65) return Math.max(0, gaussianNoise(50, 15))
+  if (rssi >= -75) return Math.max(0, gaussianNoise(120, 30))
+  if (rssi >= -85) return Math.max(0, gaussianNoise(300, 80))
+  return Math.max(0, gaussianNoise(800, 200))
+}
+
 function findClosestRoute(currentPos, routes) {
   let bestRoute = null
   let bestDist = Infinity
   for (const route of routes) {
     const dist = haversineDistance(
-      currentPos.lat,
-      currentPos.lng,
-      route[0][0],
-      route[0][1],
+      currentPos.lat, currentPos.lng,
+      route[0][0], route[0][1],
     )
     if (dist < bestDist) {
       bestDist = dist
@@ -53,37 +63,30 @@ function findClosestRoute(currentPos, routes) {
   return bestRoute
 }
 
-function exponentialDelay(meanMs) {
-  return -meanMs * Math.log(1 - Math.random())
+function parkingDelay() {
+  const MIN_MS = 5 * 60 * 1000
+  return MIN_MS + exponentialDelay(15 * 60 * 1000)
 }
 
 function attachRideLifecycle(sim) {
-  let rideEnded = false
-  sim.on("telemetry", ({ payload }) => {
-    if (sim.state.route.isFinished && !rideEnded) {
-      rideEnded = true
-      sim.stopRide()
-      setTimeout(() => {
-        rideEnded = false
-        const nextRoute = findClosestRoute(sim.state.position, ALL_ROUTES)
-        sim.startRide(nextRoute)
-      }, exponentialDelay(30_000))
-    }
+  sim.on("routeFinished", () => {
+    sim.stopRide()
+    const delay = parkingDelay()
+    console.log(`[PARKING] next ride in ${Math.round(delay / 60000)} min`)
+    setTimeout(() => {
+      const nextRoute = findClosestRoute(sim.state.position, ALL_ROUTES)
+      sim.startRide(nextRoute)
+    }, delay)
   })
 }
 
 async function main() {
-  const sim = new BikeSimulator(
-    BIKE_ID,
-    ROUTE_PORTO_ANTICO_TO_PIAZZA_DE_FERRARI.slice(0, 15),
-    SCENARIO,
-  )
+  const startRoute = ALL_ROUTES[Math.floor(Math.random() * ALL_ROUTES.length)]
+  const sim = new BikeSimulator(BIKE_ID, startRoute, SCENARIO)
   const mqttClient = mqtt.connect(BROKER_URL, MQTT_OPTS)
 
   mqttClient.on("connect", () => {
-    console.log(
-      `Connected to MQTT broker at ${BROKER_URL} with client ID ${clientId}`,
-    )
+    console.log(`Connected to MQTT broker at ${BROKER_URL} with client ID ${clientId}`)
 
     sim.on("rideStarted", (data) => {
       console.log(`\n[RIDE STARTED]`)
@@ -102,14 +105,15 @@ async function main() {
 
     sim.on("telemetry", ({ payload }) => {
       console.log(JSON.stringify(payload, null, 2))
-      mqttClient.publish(
-        TOPIC_TELEMETRY,
-        JSON.stringify(payload),
-        QOS_TELEMETRY,
-        (err) => {
+      const delay = getNetworkLatency(payload.rssi)
+      if (delay > 400) {
+        console.log(`[LATENCY] ${Math.round(delay)}ms  (rssi: ${payload.rssi} dBm)`)
+      }
+      setTimeout(() => {
+        mqttClient.publish(TOPIC_TELEMETRY, JSON.stringify(payload), QOS_TELEMETRY, (err) => {
           if (err) console.error(`Failed to publish telemetry: ${err.message}`)
-        },
-      )
+        })
+      }, delay)
     })
 
     attachRideLifecycle(sim)
@@ -124,8 +128,12 @@ async function main() {
   process.on("SIGINT", () => {
     console.log("Shutting down...")
     sim.stopRide()
-    mqttClient.end()
-    process.exit(0)
+    const finalPayload = sim.state.toPayload()
+    mqttClient.publish(TOPIC_TELEMETRY, JSON.stringify(finalPayload), { qos: 1 }, (err) => {
+      if (err) console.error(`Failed to publish final telemetry: ${err.message}`)
+      mqttClient.end()
+      process.exit(0)
+    })
   })
 }
 
