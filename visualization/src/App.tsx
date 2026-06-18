@@ -183,6 +183,7 @@ function DashboardScreen({ onNavigateHeatmap }: { onNavigateHeatmap: () => void 
       <main className="split-layout">
         <BikeList
           rows={dashboard.latestRows}
+          bikeUsageById={dashboard.bikeUsageById}
           loading={dashboard.loadingLatest}
           selectedBikeId={dashboard.selectedBikeId}
           onSelectBike={(bikeId) => handleSelectBike(bikeId)}
@@ -194,6 +195,7 @@ function DashboardScreen({ onNavigateHeatmap }: { onNavigateHeatmap: () => void 
             selectedRide={dashboard.selectedRide}
             rides={dashboard.rides}
             totalRideDistanceKm={dashboard.totalRideDistanceKm}
+            bikeUsagePercent={dashboard.bikeUsagePercent}
             alerts={dashboard.alerts}
             batterySeries={dashboard.batterySeries}
             speedSeries={dashboard.speedSeries}

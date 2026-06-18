@@ -1,14 +1,13 @@
 import type { BikeRow } from "../types";
 import { BatteryChart } from "./BatteryChart";
 import { SpeedChart } from "./SpeedChart";
-import { bikeColumns } from "../types";
 import {
-  formatBatteryPercent,
   formatCell,
   formatClockTime,
   formatDateOnly,
   formatDuration,
   formatMetric,
+  formatPercent,
   formatTime,
 } from "../utils/format";
 import type { AlertRow } from "../types";
@@ -19,6 +18,7 @@ type Props = {
   selectedRide: RideSummary | null;
   rides: RideSummary[];
   totalRideDistanceKm: number;
+  bikeUsagePercent: number | null;
   alerts: AlertRow[];
   batterySeries: Array<{ time: string; battery: number }>;
   speedSeries: Array<{ time: string; speed: number }>;
@@ -37,6 +37,7 @@ export function BikeDetails({
   selectedRide,
   rides,
   totalRideDistanceKm,
+  bikeUsagePercent,
   alerts,
   batterySeries,
   speedSeries,
@@ -109,6 +110,10 @@ export function BikeDetails({
           <div>
             <label>Total distance traveled</label>
             <strong>{formatMetric(totalRideDistanceKm, "km")}</strong>
+          </div>
+          <div>
+            <label>Usage</label>
+            <strong>{formatPercent(bikeUsagePercent)}</strong>
           </div>
         </div>
       </section>
@@ -252,25 +257,6 @@ export function BikeDetails({
           <span>{loadingHistory ? "Loading" : `${speedSeries.length} points`}</span>
         </div>
         <SpeedChart series={speedSeries} />
-      </section>
-
-      <section className="detail-table">
-        <div className="panel-heading">
-          <h3>Latest record</h3>
-          <span>Telemetry snapshot</span>
-        </div>
-        <div className="table-wrap detail-snapshot">
-          <table>
-            <tbody>
-              {bikeColumns.map((key) => (
-                <tr key={key}>
-                  <th>{key}</th>
-                  <td>{key === "battery" ? formatBatteryPercent(selectedBike.battery) : formatCell(selectedBike[key])}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       </section>
     </>
   );

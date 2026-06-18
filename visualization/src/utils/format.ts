@@ -24,12 +24,12 @@ export function formatMetric(value: number | null | undefined, unit: string): st
   return `${value.toFixed(2)} ${unit}`;
 }
 
-export function formatBatteryPercent(value: number | null | undefined): string {
+export function formatPercent(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) {
     return "—";
   }
 
-  return `${Math.round(value)}%`;
+  return `${value.toFixed(2)}%`;
 }
 
 export function formatDuration(value: number): string {
