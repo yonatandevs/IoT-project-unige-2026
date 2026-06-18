@@ -2,24 +2,36 @@
 
 const ROUTES = [
   [
-    { name: 'Porto Antico',      lng: 8.92765, lat: 44.40757 },
-    { name: 'Piazza De Ferrari', lng: 8.93390, lat: 44.40690 },
+    { name: 'Porto Antico',      lng: 8.92861, lat: 44.40904 },
+    { name: 'Piazza De Ferrari', lng: 8.93394, lat: 44.40737 },
   ],
   [
-    { name: 'Stazione Principe', lng: 8.92056, lat: 44.41667 },
-    { name: 'Porto Antico',      lng: 8.92765, lat: 44.40757 },
+    { name: 'Stazione Principe', lng: 8.92193, lat: 44.41655 },
+    { name: 'Porto Antico',      lng: 8.92861, lat: 44.40904 },
   ],
   [
-    { name: 'Piazza De Ferrari', lng: 8.93390, lat: 44.40690 },
-    { name: 'Stazione Brignole', lng: 8.94722, lat: 44.40667 },
+    { name: 'Piazza De Ferrari', lng: 8.93394, lat: 44.40737 },
+    { name: 'Stazione Brignole', lng: 8.94575, lat: 44.40733 },
   ],
   [
-    { name: 'Stazione Brignole', lng: 8.94722, lat: 44.40667 },
-    { name: 'Stadio Marassi',    lng: 8.95250, lat: 44.41639 },
+    { name: 'Stazione Brignole', lng: 8.94575, lat: 44.40733 },
+    { name: 'Stadio Marassi',    lng: 8.94926, lat: 44.41812 },
   ],
   [
-    { name: 'Stadio Marassi',    lng: 8.95250, lat: 44.41639 },
-    { name: 'Stazione Principe', lng: 8.92056, lat: 44.41667 },
+    { name: 'Stadio Marassi',    lng: 8.94926, lat: 44.41812 },
+    { name: 'Stazione Principe', lng: 8.92193, lat: 44.41655 },
+  ],
+  [
+    { name: 'Stazione Brignole',    lng: 8.94575, lat: 44.40733 },
+    { name: 'Ospedale San Martino', lng: 8.97435, lat: 44.41055 },
+  ],
+  [
+    { name: 'Porto Antico',           lng: 8.92861, lat: 44.40904 },
+    { name: 'Stazione Sampierdarena', lng: 8.88739, lat: 44.41318 },
+  ],
+  [
+    { name: 'Stazione Sampierdarena', lng: 8.88739, lat: 44.41318 },
+    { name: 'FlixBus Genova',         lng: 8.91884, lat: 44.41613 },
   ],
 ]
 
