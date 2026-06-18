@@ -209,6 +209,10 @@ export function useBikeDashboard() {
     () => rides.find((ride) => ride.id === selectedRideId) ?? null,
     [rides, selectedRideId]
   );
+  const totalRideDistanceKm = useMemo(
+    () => rides.reduce((sum, ride) => sum + ride.distanceKm, 0),
+    [rides]
+  );
   const batterySeries = useMemo(() => buildBatterySeries(recentHistoryRows), [recentHistoryRows]);
   const speedSeries = useMemo(() => buildSpeedSeries(recentHistoryRows), [recentHistoryRows]);
   const rideGeoJson = useMemo(() => buildRideGeoJson(selectedRide), [selectedRide]);
@@ -260,6 +264,7 @@ export function useBikeDashboard() {
     selectedBike,
     selectedRide,
     rides,
+    totalRideDistanceKm,
     batterySeries,
     speedSeries,
     alerts: selectedBikeAlerts,

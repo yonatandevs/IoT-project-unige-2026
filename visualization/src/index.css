@@ -249,13 +249,15 @@ body {
 }
 
 .overview-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
   padding: 1rem;
 }
 
 .overview-grid div {
+  flex: 1 1 10rem;
+  min-width: min(10rem, 100%);
   border: 1px solid #edf2f7;
   background: #fbfdff;
   border-radius: 6px;
@@ -683,10 +685,6 @@ tbody tr:hover {
   .statusbar {
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .overview-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .map-panel {

@@ -193,6 +193,7 @@ function DashboardScreen({ onNavigateHeatmap }: { onNavigateHeatmap: () => void 
             selectedBike={dashboard.selectedBike}
             selectedRide={dashboard.selectedRide}
             rides={dashboard.rides}
+            totalRideDistanceKm={dashboard.totalRideDistanceKm}
             alerts={dashboard.alerts}
             batterySeries={dashboard.batterySeries}
             speedSeries={dashboard.speedSeries}
