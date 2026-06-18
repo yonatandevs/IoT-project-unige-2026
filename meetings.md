@@ -57,8 +57,8 @@
     - Dashboard fetches data from InfluxDB to display bikes and rides
     - Dashboard fetches alerts from MQTT and displays them
 - Clarification of data models
-    - [Bike](./models/bike.ts)
-    - [Alert](./models/alert.ts)
+    - [Bike](./shared/models/bike.ts)
+    - [Alert](./shared/models/alert.ts)
 - Next steps and meeting
     - Friday 29.05.2026 online
     - What technology will be used for simulation?

@@ -4,7 +4,7 @@ This document defines the contracts between every layer of the system:
 what MQTT topics exist, what payloads look like, what gets stored in InfluxDB,
 and how to test it all.
 
-Data models: [models/bike.ts](models/bike.ts) and [models/alert.ts](models/alert.ts)
+Data models: [bike.ts](shared/models/bike.ts) and [alert.ts](shared/models/alert.ts)
 
 ---
 
