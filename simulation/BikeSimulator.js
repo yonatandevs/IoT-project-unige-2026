@@ -341,7 +341,7 @@ class BikeSimulator extends EventEmitter {
     }
     // Bad signal = some packets never make it
     if (Math.random() < rssiToDropProbability(this.state.rssi)) {
-      console.log(`[DROP] rssi: ${this.state.rssi} dBm`)
+      //console.log(`[DROP] rssi: ${this.state.rssi} dBm`)
       return
     }
 

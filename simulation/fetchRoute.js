@@ -33,6 +33,30 @@ const ROUTES = [
     { name: 'Stazione Sampierdarena', lng: 8.88739, lat: 44.41318 },
     { name: 'FlixBus Genova',         lng: 8.91884, lat: 44.41613 },
   ],
+  [
+    { name: 'Porto Antico', lng: 8.92861, lat: 44.40904 },
+    { name: 'Boccadasse', lng: 8.97343, lat: 44.39007 },
+  ],
+  [
+    { name: 'Stazione Brignole', lng: 8.94575, lat: 44.40733 },
+    { name: 'Mercato Orientale', lng: 8.94201, lat: 44.40579 },
+  ],
+  [
+    { name: 'Castelletto', lng: 8.93305, lat: 44.41342 },
+    { name: 'Porto Antico', lng: 8.92861, lat: 44.40904 },
+  ],
+  [
+    { name: 'Stazione Brignole', lng: 8.94575, lat: 44.40733 },
+    { name: 'Piazza Tommaseo', lng: 8.95398, lat: 44.40198 },
+  ],
+  [
+    { name: 'Castello Albertis', lng: 8.92461, lat: 44.41852 },
+    { name: 'Porto Antico', lng: 8.92861, lat: 44.40904 },
+  ],
+  [
+    { name: 'Quarto Dei Mille', lng: 8.98543, lat: 44.39232 },
+    { name: 'Boccadasse', lng: 8.97343, lat: 44.39007 },
+  ],
 ]
 
 const OSRM_BASE = 'https://router.project-osrm.org'
