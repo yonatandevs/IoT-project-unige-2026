@@ -1,14 +1,13 @@
 import type { BikeRow } from "../types";
 import { BatteryChart } from "./BatteryChart";
 import { SpeedChart } from "./SpeedChart";
-import { bikeColumns } from "../types";
 import {
-  formatBatteryPercent,
   formatCell,
   formatClockTime,
   formatDateOnly,
   formatDuration,
   formatMetric,
+  formatPercent,
   formatTime,
 } from "../utils/format";
 import type { AlertRow } from "../types";
@@ -18,6 +17,8 @@ type Props = {
   selectedBike: BikeRow | null;
   selectedRide: RideSummary | null;
   rides: RideSummary[];
+  totalRideDistanceKm: number;
+  bikeUsagePercent: number | null;
   alerts: AlertRow[];
   batterySeries: Array<{ time: string; battery: number }>;
   speedSeries: Array<{ time: string; speed: number }>;
@@ -35,6 +36,8 @@ export function BikeDetails({
   selectedBike,
   selectedRide,
   rides,
+  totalRideDistanceKm,
+  bikeUsagePercent,
   alerts,
   batterySeries,
   speedSeries,
@@ -104,6 +107,14 @@ export function BikeDetails({
             <label>Last time seen</label>
             <strong>{formatTime(selectedBike._time)}</strong>
           </div>
+          <div>
+            <label>Total distance traveled</label>
+            <strong>{formatMetric(totalRideDistanceKm, "km")}</strong>
+          </div>
+          <div>
+            <label>Usage</label>
+            <strong>{formatPercent(bikeUsagePercent)}</strong>
+          </div>
         </div>
       </section>
 
@@ -120,6 +131,7 @@ export function BikeDetails({
                 <th>start</th>
                 <th>end</th>
                 <th>duration</th>
+                <th>distance</th>
                 <th>avg speed</th>
                 <th>max speed</th>
               </tr>
@@ -146,6 +158,7 @@ export function BikeDetails({
                     <td title={formatTime(ride.startTime)}>{formatClockTime(ride.startTime)}</td>
                     <td title={formatTime(ride.endTime)}>{formatClockTime(ride.endTime)}</td>
                     <td>{formatDuration(ride.durationMs)}</td>
+                    <td>{formatMetric(ride.distanceKm, "km")}</td>
                     <td>{formatMetric(ride.averageSpeed, "km/h")}</td>
                     <td>{formatMetric(ride.maxSpeed, "km/h")}</td>
                   </tr>
@@ -153,7 +166,7 @@ export function BikeDetails({
               })}
               {!loadingHistory && rides.length === 0 ? (
                 <tr>
-                  <td colSpan={6}>No rides found for this bike.</td>
+                  <td colSpan={7}>No rides found for this bike.</td>
                 </tr>
               ) : null}
             </tbody>
@@ -244,25 +257,6 @@ export function BikeDetails({
           <span>{loadingHistory ? "Loading" : `${speedSeries.length} points`}</span>
         </div>
         <SpeedChart series={speedSeries} />
-      </section>
-
-      <section className="detail-table">
-        <div className="panel-heading">
-          <h3>Latest record</h3>
-          <span>Telemetry snapshot</span>
-        </div>
-        <div className="table-wrap detail-snapshot">
-          <table>
-            <tbody>
-              {bikeColumns.map((key) => (
-                <tr key={key}>
-                  <th>{key}</th>
-                  <td>{key === "battery" ? formatBatteryPercent(selectedBike.battery) : formatCell(selectedBike[key])}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       </section>
     </>
   );

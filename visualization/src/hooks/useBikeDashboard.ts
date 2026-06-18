@@ -4,9 +4,10 @@ import {
   fetchAllBikeAlertAcknowledgements,
   fetchAllBikeAlerts,
   fetchBikeHistory,
+  fetchBikeUsageRows,
   fetchLatestBikeRows,
 } from "../lib/influx";
-import type { AlertAckRow, AlertRow, BikeRow } from "../types";
+import type { AlertAckRow, AlertRow, BikeRow, BikeUsageRow } from "../types";
 import {
   DEFAULT_VIEW_STATE,
   buildBatterySeries,
@@ -26,6 +27,7 @@ export function useBikeDashboard() {
   const [historyRows, setHistoryRows] = useState<BikeRow[]>([]);
   const [alertRows, setAlertRows] = useState<AlertRow[]>([]);
   const [ackRows, setAckRows] = useState<AlertAckRow[]>([]);
+  const [bikeUsageRows, setBikeUsageRows] = useState<BikeUsageRow[]>([]);
   const [loadingLatest, setLoadingLatest] = useState(true);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [loadingAlerts, setLoadingAlerts] = useState(false);
@@ -78,29 +80,56 @@ export function useBikeDashboard() {
     }
   }
 
-  async function getLatestAlerts() {
-    let lastAlertTime = '0'
-    if (alertRows.length > 0) {
-      const dateObj = new Date(alertRows[alertRows.length - 1]?._time);
-      dateObj.setMilliseconds(dateObj.getMilliseconds() + 1);
-      lastAlertTime = dateObj.toISOString();
-
+  async function loadBikeUsageData() {
+    try {
+      const data = await fetchBikeUsageRows();
+      setBikeUsageRows(data);
+    } catch {
+      setBikeUsageRows([]);
     }
+  }
 
+  function getLastTimestamp(data: any[]) {
+    let lastTimestamp = '0'
+    if (data.length > 0) {
+      const dateObj = new Date(data[data.length - 1]?._time);
+      dateObj.setMilliseconds(dateObj.getMilliseconds() + 1);
+      lastTimestamp = dateObj.toISOString();
+    }
+    return lastTimestamp;
+  }
+
+  async function getLatestData() {
+    const lastAlertTime = getLastTimestamp(alertRows);
     const newAlerts = await fetchAllBikeAlerts(lastAlertTime)
     newAlerts.forEach(alert => toast(`New alert for ${alert.bike_id}: ${alert.message}`))
     setAlertRows(current => [...current, ...newAlerts])
+
+    const lastBikeRowTime = getLastTimestamp(latestRows)
+    const newBikeRows = await fetchLatestBikeRows(lastBikeRowTime)
+    if (newBikeRows.length > 0) {
+      const filteredCurrent = latestRows.filter(({id }) => !newBikeRows.find((bike) => bike.id === id))
+      const affectingCurrent = newBikeRows.filter(({id}) =>  selectedBikeId === id)
+      if (affectingCurrent.length > 0) {
+        setHistoryRows((current) => [...current, ...affectingCurrent ])
+      }
+      setLatestRows(() => [...newBikeRows, ...filteredCurrent])
+      setLastUpdated(new Date().toISOString());
+      void loadBikeUsageData();
+    }
+
   }
 
   useEffect(() => {
     if (lastUpdated === null) {
       void loadLatestRows();
       void loadAlertData();
+      void loadBikeUsageData();
     }
-    const intervalId = setInterval(getLatestAlerts, 2000);
+    const intervalId = setInterval(getLatestData, 2000);
 
     return () => clearInterval(intervalId);
-  }, [alertRows]);
+  }, [alertRows, selectedBikeId]);
 
   useEffect(() => {
     const bikeId = selectedBikeId;
@@ -193,6 +222,23 @@ export function useBikeDashboard() {
     () => rides.find((ride) => ride.id === selectedRideId) ?? null,
     [rides, selectedRideId]
   );
+  const totalRideDistanceKm = useMemo(
+    () => rides.reduce((sum, ride) => sum + ride.distanceKm, 0),
+    [rides]
+  );
+  const bikeUsageById = useMemo(() => {
+    return bikeUsageRows.reduce<Record<string, number | null>>((usageById, row) => {
+      usageById[row.id] =
+        typeof row.usage_percent === "number" && Number.isFinite(row.usage_percent)
+          ? row.usage_percent
+          : null;
+      return usageById;
+    }, {});
+  }, [bikeUsageRows]);
+  const bikeUsagePercent = useMemo(
+    () => selectedBikeId ? bikeUsageById[selectedBikeId] : null,
+    [bikeUsageById, selectedBikeId]
+  );
   const batterySeries = useMemo(() => buildBatterySeries(recentHistoryRows), [recentHistoryRows]);
   const speedSeries = useMemo(() => buildSpeedSeries(recentHistoryRows), [recentHistoryRows]);
   const rideGeoJson = useMemo(() => buildRideGeoJson(selectedRide), [selectedRide]);
@@ -235,7 +281,7 @@ export function useBikeDashboard() {
     }
 
     setViewState((current) => getViewForCoordinates(selectedRide.routePoints, current));
-  }, [selectedRide]);
+  }, [selectedRideId]);
 
   return {
     latestRows,
@@ -244,6 +290,9 @@ export function useBikeDashboard() {
     selectedBike,
     selectedRide,
     rides,
+    totalRideDistanceKm,
+    bikeUsageById,
+    bikeUsagePercent,
     batterySeries,
     speedSeries,
     alerts: selectedBikeAlerts,
@@ -266,6 +315,7 @@ export function useBikeDashboard() {
     refresh: () => {
       void loadLatestRows();
       void loadAlertData();
+      void loadBikeUsageData();
     },
   };
 }

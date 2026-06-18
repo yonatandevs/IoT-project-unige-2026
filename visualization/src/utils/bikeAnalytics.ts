@@ -7,6 +7,7 @@ export type RideSummary = {
   startTime: string;
   endTime: string;
   durationMs: number;
+  distanceKm: number;
   averageSpeed: number | null;
   maxSpeed: number | null;
   sampleCount: number;
@@ -98,6 +99,38 @@ type ParkingZoneGeoJson =
   | null;
 
 const parkingZones = parkingZonesConfig as ParkingZoneConfig;
+
+function haversineDistanceKm(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number }
+): number {
+  const earthRadiusKm = 6371;
+  const lat1 = (a.lat * Math.PI) / 180;
+  const lat2 = (b.lat * Math.PI) / 180;
+  const deltaLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const deltaLng = ((b.lng - a.lng) * Math.PI) / 180;
+
+  const sinLat = Math.sin(deltaLat / 2);
+  const sinLng = Math.sin(deltaLng / 2);
+  const term =
+    sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng;
+
+  return 2 * earthRadiusKm * Math.asin(Math.min(1, Math.sqrt(term)));
+}
+
+function calculateRouteDistanceKm(routePoints: Array<{ lat: number; lng: number }>): number {
+  if (routePoints.length < 2) {
+    return 0;
+  }
+
+  let distanceKm = 0;
+
+  for (let index = 1; index < routePoints.length; index += 1) {
+    distanceKm += haversineDistanceKm(routePoints[index - 1], routePoints[index]);
+  }
+
+  return distanceKm;
+}
 
 function buildCircleCoordinates(
   center: { lat: number; lng: number },
@@ -213,12 +246,14 @@ export function summarizeRides(rows: BikeRow[]): RideSummary[] {
       const averageSpeed =
         speeds.length > 0 ? speeds.reduce((sum, value) => sum + value, 0) / speeds.length : null;
       const maxSpeed = speeds.length > 0 ? Math.max(...speeds) : null;
+      const distanceKm = calculateRouteDistanceKm(routePoints);
 
       return {
         id: rideId,
         startTime: sortedRows[0]?._time ?? "",
         endTime: sortedRows[sortedRows.length - 1]?._time ?? "",
         durationMs,
+        distanceKm,
         averageSpeed,
         maxSpeed,
         sampleCount: sortedRows.length,
