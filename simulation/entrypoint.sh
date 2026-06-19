@@ -15,5 +15,5 @@ echo "Seed done."
 
 echo "Starting live simulators..."
 node main.js normal bike-ge-001 &
-node main.js normal bike-ge-002 
+node main.js lwo_battery bike-ge-002 
 wait
