@@ -1,10 +1,5 @@
 "use strict"
-const {
-  haversineDistance,
-  gaussianNoise,
-  exponentialDelay,
-  parkingDelay,
-} = require("./utils")
+const { parkingDelay } = require("./utils")
 const { BikeSimulator } = require("./BikeSimulator.js")
 const fs = require("fs")
 const { InfluxDB, Point } = require("@influxdata/influxdb-client")
@@ -67,8 +62,8 @@ const BIKE_PROFILES = {
   "bike-ge-005": { minParkingMin: 15, meanParkingMin: 90 },
 }
 
-const DAYS = 30
-const TICK_S = 5
+const DAYS = 7
+const TICK_S = 60
 const NEW_RIDE_GAP_MS = 5 * 60 * 1000
 
 function pickRoute() {

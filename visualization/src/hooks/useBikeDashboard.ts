@@ -126,7 +126,7 @@ export function useBikeDashboard() {
       void loadAlertData();
       void loadBikeUsageData();
     }
-    const intervalId = setInterval(getLatestData, 2000);
+    const intervalId = setInterval(getLatestData, 5000);
 
     return () => clearInterval(intervalId);
   }, [alertRows, selectedBikeId]);

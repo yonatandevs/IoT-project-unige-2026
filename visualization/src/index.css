@@ -105,7 +105,7 @@ body {
   background: #f7faff;
 }
 
-.toggle-button {
+.toggle-group .toggle-button {
   min-width: 0;
   padding: 0.55rem 0.9rem;
   border: 0;
@@ -114,10 +114,10 @@ body {
   color: #52606d;
 }
 
-.toggle-button.active {
-  background: #ffffff;
-  color: #14202d;
-  box-shadow: 0 1px 2px rgba(20, 32, 45, 0.12);
+.toggle-group .toggle-button.active {
+  background: #2f6fed;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(20, 32, 45, 0.18);
 }
 
 .notification-wrap {
