@@ -4,7 +4,8 @@ export type AlertType =
   | "parking_violation"
   | "low_battery"
   | "geofence_breach"
-  | "sensor_fault";
+  | "sensor_fault"
+  | "connectivity";
 
 export type AlertSeverity = "low" | "medium" | "high" | "critical";
 
