@@ -62,12 +62,6 @@ body {
   border-radius: 6px;
 }
 
-.topbar-title p {
-  margin: 0.25rem 0 0;
-  color: #52606d;
-  font-size: 0.92rem;
-}
-
 .topbar-actions {
   display: flex;
   align-items: center;

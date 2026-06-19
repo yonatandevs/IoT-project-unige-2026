@@ -4,8 +4,6 @@ This document defines the contracts between every layer of the system:
 what MQTT topics exist, what payloads look like, what gets stored in InfluxDB,
 and how to test it all.
 
-Data models: [bike.ts](shared/models/bike.ts) and [alert.ts](shared/models/alert.ts)
-
 ---
 
 ## Architecture Overview
@@ -289,17 +287,20 @@ in the Node-RED editor (http://localhost:1880).
 
 ---
 
-## Dashboard Panel Suggestions
+## Dashboard
 
-| Panel type   | Data source                | What to show                             |
-|--------------|----------------------------|------------------------------------------|
-| Map (Geomap) | `bike` (lat, lng)          | Live bike positions on a Genoa map       |
-| Line chart   | `bike` (current_speed)     | Speed over time per bike                 |
-| Line chart   | `bike` (battery)           | Battery drain over time                  |
-| Gauge        | `bike` (battery)           | Current battery per bike (last value)    |
-| Stat         | `station` (available_slots)| Available slots per station              |
-| Table        | `alert`                    | Recent alerts with type, severity, message |
-| Bar chart    | `alert`                    | Alert count by type over last 24h        |
+The dashboard connects to the influxdb on port 8086.
+It fetches bike measurements, alerts, and alert acknowledgments according to the type definition in [types](./visualization/src/types.ts).
+New acknowledgments are written back to the influxdb for persistence.
+
+To start the dashboard directly (without docker) run the following commands:
+```shell
+cd ./visualization
+npm install
+npm run dev
+```
+The system will be available on [http://localhost:5173](http://localhost:5173)
+
 
 ---
 
