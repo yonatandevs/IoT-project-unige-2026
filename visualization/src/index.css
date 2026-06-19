@@ -69,6 +69,11 @@ body {
   position: relative;
 }
 
+.heatmap-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .icon-button {
   display: inline-flex;
   align-items: center;
@@ -82,6 +87,31 @@ body {
   width: 1.25rem;
   height: 1.25rem;
   fill: currentColor;
+}
+
+.toggle-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem;
+  border: 1px solid #c8d3e0;
+  border-radius: 6px;
+  background: #f7faff;
+}
+
+.toggle-group .toggle-button {
+  min-width: 0;
+  padding: 0.55rem 0.9rem;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #52606d;
+}
+
+.toggle-group .toggle-button.active {
+  background: #2f6fed;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(20, 32, 45, 0.18);
 }
 
 .notification-wrap {
@@ -213,13 +243,15 @@ body {
 }
 
 .overview-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
   padding: 1rem;
 }
 
 .overview-grid div {
+  flex: 1 1 10rem;
+  min-width: min(10rem, 100%);
   border: 1px solid #edf2f7;
   background: #fbfdff;
   border-radius: 6px;
@@ -273,6 +305,25 @@ body {
   position: relative;
 }
 
+.heatmap-shell {
+  height: 100%;
+}
+
+.heatmap-panel {
+  flex: 1;
+  min-height: 0;
+  grid-template-rows: 1fr;
+  position: relative;
+}
+
+.heatmap-status {
+  flex-wrap: wrap;
+}
+
+.heatmap-status span {
+  white-space: nowrap;
+}
+
 .map-canvas {
   position: relative;
   width: 100%;
@@ -286,6 +337,30 @@ body {
 }
 
 .map-panel .maplibregl-canvas {
+  outline: none;
+}
+
+.parking-zone-tooltip .maplibregl-popup-content {
+  padding: 0.35rem 0.55rem;
+  border: 1px solid #b8dcbc;
+  border-radius: 6px;
+  background: rgba(241, 251, 242, 0.98);
+  color: #21542a;
+  font-size: 0.82rem;
+  font-weight: 600;
+  box-shadow: 0 8px 18px rgba(20, 32, 45, 0.1);
+}
+
+.parking-zone-tooltip .maplibregl-popup-tip {
+  border-top-color: #b8dcbc;
+}
+
+.heatmap-panel .maplibregl-map {
+  width: 100%;
+  height: 100%;
+}
+
+.heatmap-panel .maplibregl-canvas {
   outline: none;
 }
 
@@ -604,10 +679,6 @@ tbody tr:hover {
   .statusbar {
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .overview-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .map-panel {

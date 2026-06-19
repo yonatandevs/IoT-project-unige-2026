@@ -1,11 +1,13 @@
 import type { StyleSpecification } from "maplibre-gl";
-import type { BikeRow } from "../types";
+import type { BikeRow, HeatmapMode } from "../types";
+import parkingZonesConfig from "../../../shared/parking-zones.json";
 
 export type RideSummary = {
   id: string;
   startTime: string;
   endTime: string;
   durationMs: number;
+  distanceKm: number;
   averageSpeed: number | null;
   maxSpeed: number | null;
   sampleCount: number;
@@ -61,6 +63,107 @@ export type RideGeoJson =
       }>;
     }
   | null;
+
+export type HeatmapGeoJson =
+  | {
+      type: "FeatureCollection";
+      features: Array<{
+        type: "Feature";
+        properties: { weight: number };
+        geometry: { type: "Point"; coordinates: [number, number] };
+      }>;
+    }
+  | null;
+
+type ParkingZone = {
+  zone_id: string;
+  name: string;
+  center: { lat: number; lng: number };
+  radius: number;
+};
+
+type ParkingZoneConfig = {
+  city: string;
+  zones: ParkingZone[];
+};
+
+type ParkingZoneGeoJson =
+  | {
+      type: "FeatureCollection";
+      features: Array<{
+        type: "Feature";
+        properties: { zone_id: string; name: string; radius: number };
+        geometry: { type: "Polygon"; coordinates: Array<Array<[number, number]>> };
+      }>;
+    }
+  | null;
+
+const parkingZones = parkingZonesConfig as ParkingZoneConfig;
+
+function haversineDistanceKm(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number }
+): number {
+  const earthRadiusKm = 6371;
+  const lat1 = (a.lat * Math.PI) / 180;
+  const lat2 = (b.lat * Math.PI) / 180;
+  const deltaLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const deltaLng = ((b.lng - a.lng) * Math.PI) / 180;
+
+  const sinLat = Math.sin(deltaLat / 2);
+  const sinLng = Math.sin(deltaLng / 2);
+  const term =
+    sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng;
+
+  return 2 * earthRadiusKm * Math.asin(Math.min(1, Math.sqrt(term)));
+}
+
+function calculateRouteDistanceKm(routePoints: Array<{ lat: number; lng: number }>): number {
+  if (routePoints.length < 2) {
+    return 0;
+  }
+
+  let distanceKm = 0;
+
+  for (let index = 1; index < routePoints.length; index += 1) {
+    distanceKm += haversineDistanceKm(routePoints[index - 1], routePoints[index]);
+  }
+
+  return distanceKm;
+}
+
+function buildCircleCoordinates(
+  center: { lat: number; lng: number },
+  radiusMeters: number,
+  steps = 64
+): Array<[number, number]> {
+  const earthRadiusMeters = 6_371_000;
+  const coordinates: Array<[number, number]> = [];
+  const latRad = (center.lat * Math.PI) / 180;
+  const lngRad = (center.lng * Math.PI) / 180;
+  const angularDistance = radiusMeters / earthRadiusMeters;
+  const sinLat = Math.sin(latRad);
+  const cosLat = Math.cos(latRad);
+  const sinDistance = Math.sin(angularDistance);
+  const cosDistance = Math.cos(angularDistance);
+
+  for (let index = 0; index <= steps; index += 1) {
+    const bearing = (2 * Math.PI * index) / steps;
+    const nextLat = Math.asin(
+      sinLat * cosDistance + cosLat * sinDistance * Math.cos(bearing)
+    );
+    const nextLng =
+      lngRad +
+      Math.atan2(
+        Math.sin(bearing) * sinDistance * cosLat,
+        cosDistance - sinLat * Math.sin(nextLat)
+      );
+
+    coordinates.push([(nextLng * 180) / Math.PI, (nextLat * 180) / Math.PI]);
+  }
+
+  return coordinates;
+}
 
 export function getViewForRows(rows: BikeRow[], fallback: ViewState): ViewState {
   const coordinates = rows
@@ -143,12 +246,14 @@ export function summarizeRides(rows: BikeRow[]): RideSummary[] {
       const averageSpeed =
         speeds.length > 0 ? speeds.reduce((sum, value) => sum + value, 0) / speeds.length : null;
       const maxSpeed = speeds.length > 0 ? Math.max(...speeds) : null;
+      const distanceKm = calculateRouteDistanceKm(routePoints);
 
       return {
         id: rideId,
         startTime: sortedRows[0]?._time ?? "",
         endTime: sortedRows[sortedRows.length - 1]?._time ?? "",
         durationMs,
+        distanceKm,
         averageSpeed,
         maxSpeed,
         sampleCount: sortedRows.length,
@@ -186,4 +291,78 @@ export function buildBatterySeries(rows: BikeRow[]) {
     }))
     .filter((point): point is { time: string; battery: number } => point.battery !== null)
     .sort((a, b) => Date.parse(a.time) - Date.parse(b.time));
+}
+
+export function buildSpeedSeries(rows: BikeRow[]) {
+  return rows
+    .map((row) => ({
+      time: row._time,
+      speed: typeof row.current_speed === "number" ? row.current_speed : null,
+    }))
+    .filter((point): point is { time: string; speed: number } => point.speed !== null)
+    .sort((a, b) => Date.parse(a.time) - Date.parse(b.time));
+}
+
+export function buildHeatmapGeoJson(rows: BikeRow[], mode: HeatmapMode): HeatmapGeoJson {
+  const features = rows
+    .filter((row) => {
+      if (typeof row.lat !== "number" || typeof row.lng !== "number") {
+        return false;
+      }
+
+      if (mode === "ride") {
+        return typeof row.current_ride === "string" && row.current_ride.trim() !== "";
+      } else {
+        return row.locked === true;
+      }
+    })
+    .map((row) => ({
+      type: "Feature" as const,
+      properties: { weight: 1 },
+      geometry: {
+        type: "Point" as const,
+        coordinates: [row.lng, row.lat] as [number, number],
+      },
+    }));
+
+  if (features.length === 0) {
+    return null;
+  }
+
+  return {
+    type: "FeatureCollection",
+    features,
+  };
+}
+
+export function buildParkingZoneGeoJson(): ParkingZoneGeoJson {
+  const features = parkingZones.zones
+    .filter(
+      (zone) =>
+        typeof zone.center?.lat === "number" &&
+        typeof zone.center?.lng === "number" &&
+        typeof zone.radius === "number" &&
+        Number.isFinite(zone.radius)
+    )
+    .map((zone) => ({
+      type: "Feature" as const,
+      properties: {
+        zone_id: zone.zone_id,
+        name: zone.name,
+        radius: zone.radius,
+      },
+      geometry: {
+        type: "Polygon" as const,
+        coordinates: [buildCircleCoordinates(zone.center, zone.radius)],
+      },
+    }));
+
+  if (features.length === 0) {
+    return null;
+  }
+
+  return {
+    type: "FeatureCollection",
+    features,
+  };
 }

@@ -154,3 +154,5 @@ data-processing/node-red/data/*
 
 # Data processing local env (committed for zero-config dev setup)
 !data-processing/.env
+simulation/bike-ge-001.jsonl
+simulation/*.jsonl

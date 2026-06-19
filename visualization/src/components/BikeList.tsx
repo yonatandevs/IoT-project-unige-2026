@@ -1,14 +1,15 @@
 import type { BikeRow } from "../types";
-import { formatBatteryPercent, formatMetric, formatTime } from "../utils/format";
+import { formatPercent, formatTime } from "../utils/format";
 
 type Props = {
   rows: BikeRow[];
+  bikeUsageById: Record<string, number | null | undefined>;
   loading: boolean;
   selectedBikeId: string | null;
   onSelectBike: (bikeId: string) => void;
 };
 
-export function BikeList({ rows, loading, selectedBikeId, onSelectBike }: Props) {
+export function BikeList({ rows, bikeUsageById, loading, selectedBikeId, onSelectBike }: Props) {
   return (
     <section className="panel list-panel" aria-label="Latest bike list">
       <div className="panel-heading">
@@ -24,7 +25,7 @@ export function BikeList({ rows, loading, selectedBikeId, onSelectBike }: Props)
               <th>status</th>
               <th>locked</th>
               <th>battery</th>
-              <th>speed</th>
+              <th>usage</th>
               <th>last seen</th>
             </tr>
           </thead>
@@ -49,8 +50,8 @@ export function BikeList({ rows, loading, selectedBikeId, onSelectBike }: Props)
                   <td>{row.id}</td>
                   <td>{row.status ?? "—"}</td>
                   <td>{row.locked ? "true" : "false"}</td>
-                  <td>{formatBatteryPercent(row.battery)}</td>
-                  <td>{formatMetric(row.current_speed, "km/h")}</td>
+                  <td>{formatPercent(row.battery)}</td>
+                  <td>{formatPercent(bikeUsageById[row.id])}</td>
                   <td>{formatTime(row._time)}</td>
                 </tr>
               );

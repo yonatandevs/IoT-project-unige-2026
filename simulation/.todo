@@ -2,4 +2,5 @@ TODO:
 - Implement packet loss based on RSSI (drop telemetry messages probabilistically)
 - Simulate network latency (delay MQTT publish using Gaussian noise)
 - Add SIMULATE_FALL env variable to trigger fall alarm on demand (for demo/testing)
-- Connect with Node-RED (Woki) for InfluxDB ingestion and Grafana dashboard
+- Connect with Node-RED (Woki) for InfluxDB ingestion and Grafana 
+- js

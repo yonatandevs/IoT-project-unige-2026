@@ -2,15 +2,26 @@
 require("dotenv").config()
 const mqtt = require("mqtt")
 const { BikeSimulator } = require("./BikeSimulator")
-const { haversineDistance } = require("./utils")
+const { haversineDistance, gaussianNoise, exponentialDelay, parkingDelay } = require("./utils")
+
+const { randomUUID } = require("crypto")
+
 const {
   ROUTE_PORTO_ANTICO_TO_PIAZZA_DE_FERRARI,
   ROUTE_STAZIONE_PRINCIPE_TO_PORTO_ANTICO,
   ROUTE_PIAZZA_DE_FERRARI_TO_STAZIONE_BRIGNOLE,
   ROUTE_STAZIONE_BRIGNOLE_TO_STADIO_MARASSI,
   ROUTE_STADIO_MARASSI_TO_STAZIONE_PRINCIPE,
+  ROUTE_STAZIONE_BRIGNOLE_TO_OSPEDALE_SAN_MARTINO,
+  ROUTE_PORTO_ANTICO_TO_STAZIONE_SAMPIERDARENA,
+  ROUTE_STAZIONE_SAMPIERDARENA_TO_FLIXBUS_GENOVA,
+  ROUTE_PORTO_ANTICO_TO_BOCCADASSE,
+  ROUTE_STAZIONE_BRIGNOLE_TO_MERCATO_ORIENTALE,
+  ROUTE_CASTELLETTO_TO_PORTO_ANTICO,
+  ROUTE_STAZIONE_BRIGNOLE_TO_PIAZZA_TOMMASEO,
+  ROUTE_CASTELLO_ALBERTIS_TO_PORTO_ANTICO,
+  ROUTE_QUARTO_DEI_MILLE_TO_BOCCADASSE,
 } = require("./road_routes")
-const { randomUUID } = require("crypto")
 
 const ALL_ROUTES = [
   ROUTE_PORTO_ANTICO_TO_PIAZZA_DE_FERRARI,
@@ -18,13 +29,23 @@ const ALL_ROUTES = [
   ROUTE_PIAZZA_DE_FERRARI_TO_STAZIONE_BRIGNOLE,
   ROUTE_STAZIONE_BRIGNOLE_TO_STADIO_MARASSI,
   ROUTE_STADIO_MARASSI_TO_STAZIONE_PRINCIPE,
+  ROUTE_STAZIONE_BRIGNOLE_TO_OSPEDALE_SAN_MARTINO,
+  ROUTE_PORTO_ANTICO_TO_STAZIONE_SAMPIERDARENA,
+  ROUTE_STAZIONE_SAMPIERDARENA_TO_FLIXBUS_GENOVA,
+  ROUTE_PORTO_ANTICO_TO_BOCCADASSE,
+  ROUTE_STAZIONE_BRIGNOLE_TO_MERCATO_ORIENTALE,
+  ROUTE_CASTELLETTO_TO_PORTO_ANTICO,
+  ROUTE_STAZIONE_BRIGNOLE_TO_PIAZZA_TOMMASEO,
+  ROUTE_CASTELLO_ALBERTIS_TO_PORTO_ANTICO,
+  ROUTE_QUARTO_DEI_MILLE_TO_BOCCADASSE,
 ]
 
-const BIKE_ID = `bike-ge-${randomUUID().slice(0, 6)}`
+const SCENARIO = process.argv[2] || "normal"
+
+const BIKE_ID = process.argv[3] || `bike-ge-${randomUUID().slice(0, 6)}`
 const BROKER_URL = process.env.BROKER_URL
 const TICK_MS = parseInt(process.env.TICK_MS)
-const TOPIC_TELEMETRY = `bikes/genoa/${BIKE_ID}/telemetry`
-const TOPIC_ALARM = `bikes/genoa/${BIKE_ID}/alarm`
+const TOPIC_TELEMETRY = `bike/${BIKE_ID}/telemetry`
 const clientId = `bike-${randomUUID()}`
 
 const MQTT_OPTS = {
@@ -33,7 +54,14 @@ const MQTT_OPTS = {
   reconnectPeriod: 5000,
 }
 const QOS_TELEMETRY = { qos: 0 }
-const QOS_ALARM = { qos: 1, retain: true }
+
+// Delay in ms based on signal strength — weak signal = slower delivery
+function getNetworkLatency(rssi) {
+  if (rssi >= -65) return Math.max(0, gaussianNoise(50, 15)) // good — ~50ms
+  if (rssi >= -75) return Math.max(0, gaussianNoise(120, 30)) // ok — ~120ms
+  if (rssi >= -85) return Math.max(0, gaussianNoise(300, 80)) // weak — ~300ms
+  return Math.max(0, gaussianNoise(800, 200)) // very weak — ~800ms
+}
 
 function findClosestRoute(currentPos, routes) {
   let bestRoute = null
@@ -53,30 +81,22 @@ function findClosestRoute(currentPos, routes) {
   return bestRoute
 }
 
-function exponentialDelay(meanMs) {
-  return -meanMs * Math.log(1 - Math.random())
-}
+
 
 function attachRideLifecycle(sim) {
-  let rideEnded = false
-  sim.on("telemetry", ({ payload }) => {
-    if (sim.state.route.isFinished && !rideEnded) {
-      rideEnded = true
-      sim.stopRide()
-      setTimeout(() => {
-        rideEnded = false
-        const nextRoute = findClosestRoute(sim.state.position, ALL_ROUTES)
-        sim.startRide(nextRoute)
-      }, exponentialDelay(30_000))
-    }
+  sim.on("routeFinished", () => {
+    sim.stopRide()
+    const delay = parkingDelay(BIKE_ID) 
+    console.log(`[PARKING] next ride in ${Math.round(delay / 60000)} min`)
+    setTimeout(() => {
+      const nextRoute = findClosestRoute(sim.state.position, ALL_ROUTES)
+      sim.startRide(nextRoute)
+    }, delay)
   })
 }
-
 async function main() {
-  const sim = new BikeSimulator(
-    BIKE_ID,
-    ROUTE_PORTO_ANTICO_TO_PIAZZA_DE_FERRARI.slice(0, 15),
-  )
+  const startRoute = ALL_ROUTES[Math.floor(Math.random() * ALL_ROUTES.length)]
+  const sim = new BikeSimulator(BIKE_ID, startRoute, SCENARIO)
   const mqttClient = mqtt.connect(BROKER_URL, MQTT_OPTS)
 
   mqttClient.on("connect", () => {
@@ -100,18 +120,28 @@ async function main() {
     })
 
     sim.on("telemetry", ({ payload }) => {
-      mqttClient.publish(
-        TOPIC_TELEMETRY,
-        JSON.stringify(payload),
-        QOS_TELEMETRY,
-        (err) => {
-          if (err) console.error(`Failed to publish telemetry: ${err.message}`)
-        },
-      )
-    })
+      console.log(JSON.stringify(payload, null, 2))
 
-    sim.on("alarm", (data) => {
-      mqttClient.publish(TOPIC_ALARM, JSON.stringify(data), QOS_ALARM)
+      const delay = getNetworkLatency(payload.rssi)
+
+      // Log high latency so we can see it during the demo
+      if (delay > 400) {
+        console.log(
+          `[LATENCY] ${Math.round(delay)}ms  (rssi: ${payload.rssi} dBm)`,
+        )
+      }
+
+      setTimeout(() => {
+        mqttClient.publish(
+          TOPIC_TELEMETRY,
+          JSON.stringify(payload),
+          QOS_TELEMETRY,
+          (err) => {
+            if (err)
+              console.error(`Failed to publish telemetry: ${err.message}`)
+          },
+        )
+      }, delay)
     })
 
     attachRideLifecycle(sim)
@@ -126,8 +156,20 @@ async function main() {
   process.on("SIGINT", () => {
     console.log("Shutting down...")
     sim.stopRide()
-    mqttClient.end()
-    process.exit(0)
+
+    // Publish one final telemetry so Influx gets the available/locked state
+    const finalPayload = sim.state.toPayload()
+    mqttClient.publish(
+      TOPIC_TELEMETRY,
+      JSON.stringify(finalPayload),
+      { qos: 1 },
+      (err) => {
+        if (err)
+          console.error(`Failed to publish final telemetry: ${err.message}`)
+        mqttClient.end()
+        process.exit(0)
+      },
+    )
   })
 }
 

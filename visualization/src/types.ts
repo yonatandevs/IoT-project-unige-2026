@@ -14,8 +14,16 @@ export interface BikeRow {
   imu_dx?: number;
   imu_dy?: number;
   imu_dz?: number;
-  [key: string]: string | number | boolean | undefined;
 }
+
+export interface BikeUsageRow {
+  id: string;
+  usage_percent?: number;
+}
+
+export type HeatmapMode = "ride" | "parking";
+
+export type HeatmapTimeRange = "24h" | "all";
 
 export interface AlertRow {
   _time: string;
@@ -25,7 +33,6 @@ export interface AlertRow {
   alert_id?: string;
   message?: string;
   acknowledged?: boolean;
-  [key: string]: string | number | boolean | undefined;
 }
 
 export interface AlertAckRow {
@@ -34,33 +41,4 @@ export interface AlertAckRow {
   alert_id: string;
   acked?: boolean;
   source?: string;
-  [key: string]: string | number | boolean | undefined;
 }
-
-export const bikeColumns = [
-  "_time",
-  "id",
-  "status",
-  "locked",
-  "current_ride",
-  "battery",
-  "current_speed",
-  "lat",
-  "lng",
-  "imu_x",
-  "imu_y",
-  "imu_z",
-  "imu_dx",
-  "imu_dy",
-  "imu_dz",
-] as const;
-
-export const alertColumns = [
-  "_time",
-  "bike_id",
-  "type",
-  "severity",
-  "alert_id",
-  "message",
-  "acknowledged",
-] as const;

@@ -1,8 +1,77 @@
 "use strict"
-const { time } = require("console")
 const { randomUUID } = require("crypto")
 const { EventEmitter } = require("events")
 const { haversineDistance } = require("./utils")
+
+// Genoa has very different areas — open port vs tight old-town streets
+// We use that to set a realistic signal strength per zone
+const COVERAGE_ZONES = [
+  {
+    latMin: 44.406,
+    latMax: 44.412,
+    lngMin: 8.926,
+    lngMax: 8.93,
+    rssiMean: -58,
+    rssiStd: 6,
+  }, // Porto Antico — open area, good signal
+  {
+    latMin: 44.407,
+    latMax: 44.413,
+    lngMin: 8.932,
+    lngMax: 8.938,
+    rssiMean: -82,
+    rssiStd: 8,
+  }, // Caruggi — narrow streets, bad signal
+  {
+    latMin: 44.41,
+    latMax: 44.417,
+    lngMin: 8.882,
+    lngMax: 8.9,
+    rssiMean: -72,
+    rssiStd: 10,
+  }, // Sampierdarena — mixed, average signal
+  {
+    latMin: 44.405,
+    latMax: 44.41,
+    lngMin: 8.94,
+    lngMax: 8.95,
+    rssiMean: -61,
+    rssiStd: 7,
+  }, // Brignole — open road, good signal
+  {
+    latMin: 44.404,
+    latMax: 44.408,
+    lngMin: 8.968,
+    lngMax: 8.978,
+    rssiMean: -67,
+    rssiStd: 8,
+  }, // San Martino — normal urban signal
+]
+
+// Pick RSSI based on where the bike is, fall back to a city average if no zone matches
+function getRssiForPosition(lat, lng) {
+  for (const zone of COVERAGE_ZONES) {
+    if (
+      lat >= zone.latMin &&
+      lat <= zone.latMax &&
+      lng >= zone.lngMin &&
+      lng <= zone.lngMax
+    ) {
+      return gaussianNoise(zone.rssiMean, zone.rssiStd)
+    }
+  }
+  return gaussianNoise(-65, 10) // no zone matched, use city average
+}
+
+// Weaker signal = more lost packets
+function rssiToDropProbability(rssi) {
+  if (rssi >= -65) return 0.01 // good signal, almost nothing lost
+  if (rssi >= -75) return 0.05 // ok signal, small chance of loss
+  if (rssi >= -85) return 0.25 // weak signal, 1 in 4 packets lost
+  if (rssi >= -95) return 0.6 // very weak, more lost than received
+  return 0.9 // basically no connection
+}
+
 /**
  * Generates a random number following a Gaussian (normal) distribution.
  * @param {number} mean - The center value (average speed we want)
@@ -30,7 +99,6 @@ function gaussianNoise(mean, standardDeviation) {
  * Waypoints are consumed one by one as the simulation progresses.
  * Call reset() to restart the route from the beginning.
  */
-
 class GPSRoute {
   constructor(waypoints) {
     this.waypoints = waypoints
@@ -58,9 +126,7 @@ class GPSRoute {
   }
 
   advance() {
-    if (!this.isFinished) {
-      return this.index++
-    }
+    if (!this.isFinished) return this.index++
   }
 
   reset() {
@@ -68,35 +134,45 @@ class GPSRoute {
   }
 }
 
+/**
+ * Produces physically coherent IMU readings.
+ */
+
 class IMUModel {
+  constructor() {
+    this._prev = { x: 0, y: 0, z: 9.8 }
+  }
+
   compute({ speedMs, isRiding }) {
+    let x, y, z
+
     if (!isRiding) {
-      return {
-        x: gaussianNoise(0, 0.02),
-        y: gaussianNoise(0, 0.02),
-        z: gaussianNoise(9.8, 0.05),
-        dx: gaussianNoise(0, 0.05),
-        dy: gaussianNoise(0, 0.05),
-        dz: gaussianNoise(0, 0.03),
-      }
+      x = gaussianNoise(0, 0.02)
+      y = gaussianNoise(0, 0.02)
+      z = gaussianNoise(9.8, 0.05)
     } else {
-      return {
-        x: gaussianNoise(0, 0.15),
-        y: gaussianNoise(0, 0.1),
-        z: gaussianNoise(9.8, 0.1 + speedMs * 0.02),
-        dx: gaussianNoise(0, 0.05),
-        dy: gaussianNoise(0, 0.05),
-        dz: gaussianNoise(0, 0.03),
-      }
+      x = gaussianNoise(0, 0.15)
+      y = gaussianNoise(0, 0.1)
+      z = gaussianNoise(9.8, 0.1 + speedMs * 0.02)
     }
+
+    const dx = x - this._prev.x
+    const dy = y - this._prev.y
+    const dz = z - this._prev.z
+
+    this._prev = { x, y, z }
+
+    return { x, y, z, dx, dy, dz }
+  }
+
+  reset() {
+    this._prev = { x: 0, y: 0, z: 9.8 }
   }
 }
 
 /**
- * Simulates a bike ride along a predefined GPS route.
- * Emits "telemetry" events at each simulation tick with the current bike state.
+ * Holds all mutable simulation state for a single bike.
  */
-
 class BikeState {
   constructor(id, waypoints) {
     this.id = id
@@ -129,50 +205,27 @@ class BikeState {
 }
 
 /**
- * Detects alarm conditions based on the bike state.
+ * Physics-driven e-bike simulator.
+ * Supports scenario injection for demo/testing purposes.
+ *
+ * Scenarios:
+ *   normal      — standard simulation
+ *   fall        — injects fall IMU values at tick 10
+ *   low_battery — forces battery to 12% at tick 1
  */
-
-class AlarmDetector {
-  check(bike) {
-    const alarms = []
-    if (bike.battery <= 10 && bike.status === "rented") {
-      alarms.push("low_battery")
-    }
-    if (
-      bike.status === "rented" &&
-      bike.locked === false &&
-      bike.current_speed > 25
-    ) {
-      alarms.push("dangerous_acceleration_or_crash")
-    }
-    const { x, y, z } = bike.imu
-
-    if (bike.locked && bike.status === "available") {
-      if (z < 3 && (Math.abs(x) > 7 || Math.abs(y) > 7)) {
-        alarms.push("tamper_detected_while_parked")
-      }
-    }
-
-    if (!bike.locked && bike.status === "rented") {
-      if (z < 3 && (Math.abs(x) > 7 || Math.abs(y) > 7)) {
-        alarms.push("fall_detected")
-      }
-    }
-
-    return alarms
-  }
-}
-
 class BikeSimulator extends EventEmitter {
-  constructor(id, waypoints) {
+  constructor(id, waypoints, scenario = "normal") {
     super()
     this.id = id
     this.state = new BikeState(id, waypoints)
-    this.alarmDetector = new AlarmDetector()
     this.imuModel = new IMUModel()
+    this._scenario = scenario
+    this._tickCount = 0
+    this.routeFinishedEmitted = false
   }
 
   startRide(route = null) {
+    this.routeFinishedEmitted = false
     if (route) {
       this.state.route = new GPSRoute(route)
       this.state.position = this.state.route.current()
@@ -183,6 +236,8 @@ class BikeSimulator extends EventEmitter {
     this.state.locked = false
     this.state.current_ride = `ride-${randomUUID()}`
     this.state._rideStartMs = Date.now()
+    this.imuModel.reset()
+
     this.emit("rideStarted", {
       bikeId: this.id,
       rideId: this.state.current_ride,
@@ -199,6 +254,7 @@ class BikeSimulator extends EventEmitter {
     const durationS = this.state._rideStartMs
       ? Math.round((Date.now() - this.state._rideStartMs) / 1000)
       : 0
+    this.imuModel.reset()
     this.emit("rideStopped", {
       bikeId: this.id,
       rideId: temp,
@@ -245,6 +301,7 @@ class BikeSimulator extends EventEmitter {
         }
       }
 
+      // Assume 100% battery allows for 50km.
       const batteryDrain = (distance / 50000) * 100
       this.state.battery = Math.max(0, this.state.battery - batteryDrain)
     }
@@ -254,22 +311,42 @@ class BikeSimulator extends EventEmitter {
       speedMs: this.state.current_speed / 3.6,
       isRiding,
     })
-    this.state.rssi = Math.round(gaussianNoise(-65, 10))
 
-    this.alarmDetector.check(this.state.toPayload()).forEach((alarm) => {
-      this.emit("alarm", {
-        bikeId: this.id,
-        alarm,
-        position: this.state.position,
-        locked: this.state.locked,
-        timestamp: this.state.timestamp,
-      })
-    })
+    // Increment tick counter
+    this._tickCount++
+
+    // Scenario injection
+    if (this._scenario === "fall" && this._tickCount === 10) {
+      console.log("[SCENARIO] Injecting fall event")
+      this.state.imu = { x: 8.5, y: 0.2, z: 1.1, dx: 0, dy: 0, dz: 0 }
+    }
+
+    if (this._scenario === "low_battery" && this._tickCount === 1) {
+      console.log("[SCENARIO] Injecting low battery")
+      this.state.battery = 15
+    }
+
+    // Signal depends on where the bike is right now
+    const pos = this.state.position
+    this.state.rssi = pos
+      ? Math.round(getRssiForPosition(pos.lat, pos.lng))
+      : Math.round(gaussianNoise(-65, 10))
+    if (
+      this.state.status === "rented" &&
+      this.state.route.isFinished &&
+      !this.routeFinishedEmitted
+    ) {
+      this.routeFinishedEmitted = true
+      this.emit("routeFinished")
+    }
+    // Bad signal = some packets never make it
+    if (Math.random() < rssiToDropProbability(this.state.rssi)) {
+      //console.log(`[DROP] rssi: ${this.state.rssi} dBm`)
+      return
+    }
 
     this.emit("telemetry", { payload: this.state.toPayload() })
   }
 }
 
-module.exports = {
-  BikeSimulator,
-}
+module.exports = { BikeSimulator }
