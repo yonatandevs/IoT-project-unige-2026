@@ -113,10 +113,9 @@ export function HeatmapPage({ onNavigateHome }: Props) {
 
   return (
     <div className="app-shell heatmap-shell">
-      <header className="topbar heatmap-topbar">
-        <div className="topbar-title">
+      <header className="topbar">
+        <div>
           <h1>Bike Heatmap</h1>
-          <p>{mode === "ride" ? "Riding points" : "Parking points"}</p>
         </div>
 
         <div className="topbar-actions heatmap-actions">
