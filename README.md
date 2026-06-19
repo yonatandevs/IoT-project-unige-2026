@@ -3,6 +3,14 @@
 This is a design for a bike sharing mobility platform for the municipality of Genoa.
 The slideshow can be found [here](https://docs.google.com/presentation/d/12apYBCjeo8CgFIBna6Lill1BvOEHjzwkTz_h2BHt-9Q/edit?usp=sharing).
 
+Docker is required to run the project.
+The following command starts all the services and the simulation:
+```shell
+docker compose up -d
+```
+The dashboard will be available at [http://localhost:80](http://localhost:80).
+The simulation will continue even if the dashboard is not open.
+
 ## Architecture
 
 ![Architecture](images/architecture.png)
@@ -55,3 +63,5 @@ It should be carefully decided which data is relevant to see at the first glance
 
 Additional to the data visualization, the dashboard could also become a control panel for operators.
 This could include locking or unlocking a bike from the application, changing the restriced/allowed parking zones and automatically notifying an employee about necessary bike maintenance.
+
+A more technical description can be found in [INTEGRATION.md](./INTEGRATION.md#dashboard)
