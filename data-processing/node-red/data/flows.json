@@ -3,31 +3,31 @@
     "id": "flow-a-tab",
     "type": "tab",
     "label": "Flow A — Ingest & Store",
-    "info": "Receives telemetry from bike/+/telemetry and station/+/status.\nWrites to 'bike' and 'station' measurements in InfluxDB.\nAlso tracks last-seen timestamps for connectivity monitoring."
+    "info": "Subscribes to bike/+/telemetry, stores each message as a 'bike' point in InfluxDB, and updates the last-seen timestamp used by the connectivity check."
   },
   {
     "id": "flow-b-tab",
     "type": "tab",
     "label": "Flow B — Fall Detection",
-    "info": "Detects falls by monitoring IMU tilt (z far from gravity) or impact spikes.\nOnly triggers for rented bikes. Deduplicates: one alert per bike until recovered.\nWrites 'alert' event to InfluxDB."
+    "info": "Checks if a rented bike has tipped over (z-axis far from 9.8) or hit something hard. Only fires once per bike until the readings go back to normal."
   },
   {
     "id": "flow-c-tab",
     "type": "tab",
     "label": "Flow C — Parking Violation",
-    "info": "Detects stationary bikes parked outside authorized zones.\nZones loaded from /shared/parking-zones.json.\nDeduplicates: one alert per bike while parked illegally.\nWrites 'alert' event to InfluxDB."
+    "info": "Flags bikes that stop outside the allowed parking zones (loaded from /shared/parking-zones.json). One alert per bike while it stays parked illegally."
   },
   {
     "id": "flow-d-tab",
     "type": "tab",
     "label": "Flow D — Battery Alerts",
-    "info": "Monitors battery level with severity tiers: <=15% low, <=5% medium, 0% high.\nDeduplicates: only triggers when severity escalates.\nWrites 'alert' event to InfluxDB."
+    "info": "Raises a low-battery alert when charge drops to 15%, 5%, or 0%. A new alert is only created when the severity level actually changes."
   },
   {
     "id": "flow-e-tab",
     "type": "tab",
     "label": "Flow E — Connectivity Monitoring",
-    "info": "Monitors bike connectivity by tracking last-seen timestamps.\nRaises alert when a bike does not send data for 1 minute.\nDeduplicates: one alert per bike until it reconnects."
+    "info": "Keeps track of when each bike last sent data. If nothing arrives for 1 minute, an alert is raised. Clears automatically once the bike comes back online."
   },
   {
     "id": "mqtt-broker-config",
