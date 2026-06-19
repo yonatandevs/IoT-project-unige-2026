@@ -3,25 +3,31 @@
     "id": "flow-a-tab",
     "type": "tab",
     "label": "Flow A — Ingest & Store",
-    "info": "Receives telemetry from bike/+/telemetry and station/+/status.\nWrites to 'bike' and 'station' measurements in InfluxDB."
+    "info": "Subscribes to bike/+/telemetry, stores each message as a 'bike' point in InfluxDB, and updates the last-seen timestamp used by the connectivity check."
   },
   {
     "id": "flow-b-tab",
     "type": "tab",
     "label": "Flow B — Fall Detection",
-    "info": "Monitors IMU fields in telemetry for sudden acceleration spikes.\nWrites 'alert' event to InfluxDB."
+    "info": "Checks if a rented bike has tipped over (z-axis far from 9.8) or hit something hard. Only fires once per bike until the readings go back to normal."
   },
   {
     "id": "flow-c-tab",
     "type": "tab",
     "label": "Flow C — Parking Violation",
-    "info": "Detects stationary bikes parked outside authorized zones.\nZones loaded from /data/parking-zones.json.\nWrites 'alert' event to InfluxDB."
+    "info": "Flags bikes that stop outside the allowed parking zones (loaded from /shared/parking-zones.json). One alert per bike while it stays parked illegally."
   },
   {
     "id": "flow-d-tab",
     "type": "tab",
-    "label": "Flow D — Battery & Dock Events",
-    "info": "Monitors battery level in telemetry and dock/undock events.\nWrites 'alert' event to InfluxDB."
+    "label": "Flow D — Battery Alerts",
+    "info": "Raises a low-battery alert when charge drops to 15%, 5%, or 0%. A new alert is only created when the severity level actually changes."
+  },
+  {
+    "id": "flow-e-tab",
+    "type": "tab",
+    "label": "Flow E — Connectivity Monitoring",
+    "info": "Keeps track of when each bike last sent data. If nothing arrives for 1 minute, an alert is raised. Clears automatically once the bike comes back online."
   },
   {
     "id": "mqtt-broker-config",
@@ -67,7 +73,7 @@
     "type": "function",
     "z": "flow-a-tab",
     "name": "Telemetry → bike measurement",
-    "func": "const parts = msg.topic.split('/');\nconst bikeId = parts[1];\nconst d = msg.payload;\n\nmsg.payload = [{\n    measurement: 'bike',\n    tags: { id: bikeId },\n    fields: {\n        lat: d.position.lat,\n        lng: d.position.lng,\n        current_speed: d.current_speed,\n        imu_x: d.imu.x,\n        imu_y: d.imu.y,\n        imu_z: d.imu.z,\n        imu_dx: d.imu.dx,\n        imu_dy: d.imu.dy,\n        imu_dz: d.imu.dz,\n        battery: d.battery,\n        locked: d.locked,\n        status: d.status,\n        current_ride: d.current_ride || ''\n    }\n}];\n\nreturn msg;",
+    "func": "const parts = msg.topic.split('/');\nconst bikeId = parts[1];\nconst d = msg.payload;\n\nmsg.payload = [{\n    measurement: 'bike',\n    tags: { id: bikeId },\n    fields: {\n        lat: d.position.lat,\n        lng: d.position.lng,\n        current_speed: d.current_speed,\n        imu_x: d.imu.x,\n        imu_y: d.imu.y,\n        imu_z: d.imu.z,\n        imu_dx: d.imu.dx,\n        imu_dy: d.imu.dy,\n        imu_dz: d.imu.dz,\n        battery: d.battery,\n        locked: d.locked,\n        status: d.status,\n        current_ride: d.current_ride || ''\n    }\n}];\n\nconst lastSeen = global.get('bikeLastSeen') || {};\nlastSeen[bikeId] = Date.now();\nglobal.set('bikeLastSeen', lastSeen);\n\nreturn msg;",
     "outputs": 1,
     "x": 380,
     "y": 120,
@@ -88,48 +94,6 @@
     "bucket": "bike_data",
     "x": 640,
     "y": 120,
-    "wires": []
-  },
-  {
-    "id": "mqtt-in-station",
-    "type": "mqtt in",
-    "z": "flow-a-tab",
-    "name": "station/+/status",
-    "topic": "station/+/status",
-    "qos": "0",
-    "datatype": "json",
-    "broker": "mqtt-broker-config",
-    "inputs": 0,
-    "x": 120,
-    "y": 280,
-    "wires": [["func-store-station"]]
-  },
-  {
-    "id": "func-store-station",
-    "type": "function",
-    "z": "flow-a-tab",
-    "name": "Station → station measurement",
-    "func": "const parts = msg.topic.split('/');\nconst stationId = parts[1];\nconst data = msg.payload;\n\nmsg.payload = [{\n    measurement: 'station',\n    tags: { station_id: stationId },\n    fields: {\n        available_slots: data.available_slots,\n        bikes_docked: data.bikes_docked\n    }\n}];\n\nreturn msg;",
-    "outputs": 1,
-    "x": 380,
-    "y": 280,
-    "wires": [["influx-out-station"]]
-  },
-  {
-    "id": "influx-out-station",
-    "type": "influxdb batch",
-    "z": "flow-a-tab",
-    "influxdb": "influxdb-config",
-    "precision": "ms",
-    "retentionPolicy": "",
-    "name": "Write Station",
-    "database": "bike_data",
-    "precisionV18FluxV20": "ms",
-    "retentionPolicyV18Flux": "",
-    "org": "iot-bikes",
-    "bucket": "bike_data",
-    "x": 640,
-    "y": 280,
     "wires": []
   },
   {
@@ -167,8 +131,8 @@
     "id": "func-fall-detect",
     "type": "function",
     "z": "flow-b-tab",
-    "name": "Detect Fall (|imu_z| > 25)",
-    "func": "const data = msg.payload;\nconst parts = msg.topic.split('/');\nconst bikeId = parts[1];\n\nconst absZ = Math.abs(data.imu.z);\n\nif (absZ > 25) {\n    const ts = Date.now();\n    msg.payload = [{\n        measurement: 'alert',\n        tags: {\n            bike_id: bikeId,\n            type: 'fall',\n            severity: 'high'\n        },\n        fields: {\n            alert_id: 'fall-' + bikeId + '-' + ts,\n            message: 'Fall detected: |imu_z| = ' + absZ.toFixed(2) + ' m/s²'\n        }\n    }];\n    return msg;\n}\n\nreturn null;",
+    "name": "Detect Fall (tilt or impact)",
+    "func": "const data = msg.payload;\nconst parts = msg.topic.split('/');\nconst bikeId = parts[1];\n\nconst z = data.imu.z;\nconst x = data.imu.x;\nconst y = data.imu.y;\nconst totalAcc = Math.sqrt(x * x + y * y + z * z);\nconst tiltFromGravity = Math.abs(z - 9.8);\nconst isFall = tiltFromGravity > 4.0 || totalAcc > 25;\n\nif (isFall && data.status === 'rented') {\n    const activeAlerts = flow.get('activeFallAlerts') || {};\n    if (activeAlerts[bikeId]) return null;\n    activeAlerts[bikeId] = Date.now();\n    flow.set('activeFallAlerts', activeAlerts);\n    const ts = Date.now();\n    msg.payload = [{\n        measurement: 'alert',\n        tags: {\n            bike_id: bikeId,\n            type: 'fall',\n            severity: 'high'\n        },\n        fields: {\n            alert_id: 'fall-' + bikeId + '-' + ts,\n            message: 'Fall detected: tilt=' + tiltFromGravity.toFixed(1) + ', total_acc=' + totalAcc.toFixed(2) + ' m/s2'\n        }\n    }];\n    return msg;\n} else if (!isFall) {\n    const activeAlerts = flow.get('activeFallAlerts') || {};\n    if (activeAlerts[bikeId]) {\n        delete activeAlerts[bikeId];\n        flow.set('activeFallAlerts', activeAlerts);\n    }\n}\n\nreturn null;",
     "outputs": 1,
     "x": 380,
     "y": 100,
@@ -222,11 +186,11 @@
     "type": "function",
     "z": "flow-c-tab",
     "name": "Detect Unauthorized Parking",
-    "func": "const data = msg.payload;\nconst parts = msg.topic.split('/');\nconst bikeId = parts[1];\n\nconst ZONES = global.get('parkingZones') || [];\nif (ZONES.length === 0) {\n    node.warn('No parking zones loaded — check parking-zones.json');\n    return null;\n}\n\nfunction distanceMeters(lat1, lng1, lat2, lng2) {\n    const R = 6371000;\n    const dLat = (lat2 - lat1) * Math.PI / 180;\n    const dLng = (lng2 - lng1) * Math.PI / 180;\n    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +\n              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *\n              Math.sin(dLng/2) * Math.sin(dLng/2);\n    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));\n}\n\nif (data.current_speed >= 1) return null;\n\nconst lat = data.position.lat;\nconst lng = data.position.lng;\n\nconst insideZone = ZONES.some(zone => {\n    const dist = distanceMeters(lat, lng, zone.center[0], zone.center[1]);\n    return dist <= zone.radius;\n});\n\nif (!insideZone) {\n    const ts = Date.now();\n    msg.payload = [{\n        measurement: 'alert',\n        tags: {\n            bike_id: bikeId,\n            type: 'parking_violation',\n            severity: 'medium'\n        },\n        fields: {\n            alert_id: 'parking_violation-' + bikeId + '-' + ts,\n            message: 'Bike parked outside authorized zone at ' + lat.toFixed(5) + ', ' + lng.toFixed(5)\n        }\n    }];\n    return msg;\n}\n\nreturn null;",
+    "func": "const data = msg.payload;\nconst parts = msg.topic.split('/');\nconst bikeId = parts[1];\n\nconst ZONES = global.get('parkingZones') || [];\nif (ZONES.length === 0) {\n    node.warn('No parking zones loaded');\n    return null;\n}\n\nfunction distanceMeters(lat1, lng1, lat2, lng2) {\n    const R = 6371000;\n    const dLat = (lat2 - lat1) * Math.PI / 180;\n    const dLng = (lng2 - lng1) * Math.PI / 180;\n    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +\n              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *\n              Math.sin(dLng/2) * Math.sin(dLng/2);\n    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));\n}\n\nif (data.current_speed >= 1) {\n    const activeAlerts = flow.get('activeParkingAlerts') || {};\n    if (activeAlerts[bikeId]) {\n        delete activeAlerts[bikeId];\n        flow.set('activeParkingAlerts', activeAlerts);\n    }\n    return null;\n}\n\nconst lat = data.position.lat;\nconst lng = data.position.lng;\n\nconst insideZone = ZONES.some(zone => {\n    const dist = distanceMeters(lat, lng, zone.center.lat, zone.center.lng);\n    return dist <= zone.radius;\n});\n\nif (!insideZone) {\n    const activeAlerts = flow.get('activeParkingAlerts') || {};\n    if (activeAlerts[bikeId]) return null;\n    activeAlerts[bikeId] = Date.now();\n    flow.set('activeParkingAlerts', activeAlerts);\n    const ts = Date.now();\n    msg.payload = [{\n        measurement: 'alert',\n        tags: {\n            bike_id: bikeId,\n            type: 'parking_violation',\n            severity: 'medium'\n        },\n        fields: {\n            alert_id: 'parking_violation-' + bikeId + '-' + ts,\n            message: 'Bike parked outside authorized zone at ' + lat.toFixed(5) + ', ' + lng.toFixed(5)\n        }\n    }];\n    return msg;\n} else {\n    const activeAlerts = flow.get('activeParkingAlerts') || {};\n    if (activeAlerts[bikeId]) {\n        delete activeAlerts[bikeId];\n        flow.set('activeParkingAlerts', activeAlerts);\n    }\n}\n\nreturn null;",
     "outputs": 1,
     "x": 380,
     "y": 100,
-    "wires": [["debug-parking"]]
+    "wires": [["debug-parking", "influx-out-parking"]]
   },
   {
     "id": "debug-parking",
@@ -238,6 +202,23 @@
     "console": true,
     "x": 650,
     "y": 160,
+    "wires": []
+  },
+  {
+    "id": "influx-out-parking",
+    "type": "influxdb batch",
+    "z": "flow-c-tab",
+    "influxdb": "influxdb-config",
+    "precision": "ms",
+    "retentionPolicy": "",
+    "name": "Write Alert",
+    "database": "bike_data",
+    "precisionV18FluxV20": "ms",
+    "retentionPolicyV18Flux": "",
+    "org": "iot-bikes",
+    "bucket": "bike_data",
+    "x": 650,
+    "y": 80,
     "wires": []
   },
   {
@@ -301,8 +282,8 @@
     "id": "func-battery-check",
     "type": "function",
     "z": "flow-d-tab",
-    "name": "Check Low Battery (< 15%)",
-    "func": "const data = msg.payload;\nconst parts = msg.topic.split('/');\nconst bikeId = parts[1];\n\nif (data.battery < 15) {\n    const ts = Date.now();\n    msg.payload = [{\n        measurement: 'alert',\n        tags: {\n            bike_id: bikeId,\n            type: 'low_battery',\n            severity: 'low'\n        },\n        fields: {\n            alert_id: 'low_battery-' + bikeId + '-' + ts,\n            message: 'Battery low: ' + data.battery.toFixed(1) + '%'\n        }\n    }];\n    return msg;\n}\n\nreturn null;",
+    "name": "Check Low Battery (severity tiers)",
+    "func": "const data = msg.payload;\nconst parts = msg.topic.split('/');\nconst bikeId = parts[1];\n\nlet severity = null;\nif (data.battery <= 0) {\n    severity = 'high';\n} else if (data.battery <= 5) {\n    severity = 'medium';\n} else if (data.battery <= 15) {\n    severity = 'low';\n}\n\nif (severity) {\n    const activeBatteryAlerts = flow.get('activeBatteryAlerts') || {};\n    const existing = activeBatteryAlerts[bikeId];\n    if (existing && existing === severity) return null;\n    activeBatteryAlerts[bikeId] = severity;\n    flow.set('activeBatteryAlerts', activeBatteryAlerts);\n    const ts = Date.now();\n    msg.payload = [{\n        measurement: 'alert',\n        tags: {\n            bike_id: bikeId,\n            type: 'low_battery',\n            severity: severity\n        },\n        fields: {\n            alert_id: 'low_battery-' + bikeId + '-' + ts,\n            message: 'Battery low: ' + data.battery.toFixed(1) + '% (severity: ' + severity + ')'\n        }\n    }];\n    return msg;\n} else {\n    const activeBatteryAlerts = flow.get('activeBatteryAlerts') || {};\n    if (activeBatteryAlerts[bikeId]) {\n        delete activeBatteryAlerts[bikeId];\n        flow.set('activeBatteryAlerts', activeBatteryAlerts);\n    }\n}\n\nreturn null;",
     "outputs": 1,
     "x": 380,
     "y": 100,
@@ -321,32 +302,6 @@
     "wires": []
   },
   {
-    "id": "mqtt-in-dock-event",
-    "type": "mqtt in",
-    "z": "flow-d-tab",
-    "name": "station/+/event (placeholder)",
-    "topic": "station/+/event",
-    "qos": "0",
-    "datatype": "json",
-    "broker": "mqtt-broker-config",
-    "inputs": 0,
-    "x": 140,
-    "y": 260,
-    "wires": [["debug-dock-event"]]
-  },
-  {
-    "id": "debug-dock-event",
-    "type": "debug",
-    "z": "flow-d-tab",
-    "name": "Dock Event (not processed yet)",
-    "active": true,
-    "tosidebar": true,
-    "console": false,
-    "x": 440,
-    "y": 260,
-    "wires": []
-  },
-  {
     "id": "4651189413b0306f",
     "type": "influxdb batch",
     "z": "flow-d-tab",
@@ -361,6 +316,61 @@
     "bucket": "bike_data",
     "x": 670,
     "y": 60,
+    "wires": []
+  },
+  {
+    "id": "inject-connectivity-check",
+    "type": "inject",
+    "z": "flow-e-tab",
+    "name": "Every 15s",
+    "props": [],
+    "repeat": "15",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "60",
+    "topic": "",
+    "x": 130,
+    "y": 100,
+    "wires": [["func-connectivity-check"]]
+  },
+  {
+    "id": "func-connectivity-check",
+    "type": "function",
+    "z": "flow-e-tab",
+    "name": "Check Bike Connectivity",
+    "func": "const lastSeen = global.get('bikeLastSeen') || {};\nconst activeAlerts = flow.get('activeConnectivityAlerts') || {};\nconst now = Date.now();\nconst TIMEOUT_MS = 60000;\nconst alerts = [];\n\nfor (const bikeId of Object.keys(lastSeen)) {\n    const elapsed = now - lastSeen[bikeId];\n    if (elapsed > TIMEOUT_MS) {\n        if (activeAlerts[bikeId]) continue;\n        activeAlerts[bikeId] = now;\n        alerts.push({\n            measurement: 'alert',\n            tags: {\n                bike_id: bikeId,\n                type: 'connectivity',\n                severity: 'medium'\n            },\n            fields: {\n                alert_id: 'connectivity-' + bikeId + '-' + now,\n                message: 'Bike offline: no data received for ' + Math.round(elapsed / 1000) + 's'\n            }\n        });\n    } else if (activeAlerts[bikeId]) {\n        delete activeAlerts[bikeId];\n    }\n}\n\nflow.set('activeConnectivityAlerts', activeAlerts);\n\nif (alerts.length > 0) {\n    msg.payload = alerts;\n    return msg;\n}\n\nreturn null;",
+    "outputs": 1,
+    "x": 380,
+    "y": 100,
+    "wires": [["influx-out-connectivity", "debug-connectivity"]]
+  },
+  {
+    "id": "influx-out-connectivity",
+    "type": "influxdb batch",
+    "z": "flow-e-tab",
+    "influxdb": "influxdb-config",
+    "precision": "ms",
+    "retentionPolicy": "",
+    "name": "Write Alert",
+    "database": "bike_data",
+    "precisionV18FluxV20": "ms",
+    "retentionPolicyV18Flux": "",
+    "org": "iot-bikes",
+    "bucket": "bike_data",
+    "x": 650,
+    "y": 80,
+    "wires": []
+  },
+  {
+    "id": "debug-connectivity",
+    "type": "debug",
+    "z": "flow-e-tab",
+    "name": "Connectivity Alert Log",
+    "active": true,
+    "tosidebar": true,
+    "console": true,
+    "x": 650,
+    "y": 160,
     "wires": []
   }
 ]
