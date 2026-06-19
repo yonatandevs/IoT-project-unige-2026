@@ -1,5 +1,35 @@
 # Meetings
 
+## 19.06.2026
+- Final requirements for MVP
+  - Simulation
+    - done
+  - Data-processing
+    - Align the alerts with the simulation data
+    - Some alerts are not yet saved to the database
+    - Alerts should only be triggered once per bike and category, not every time new data arrives. Maybe have different severity classes (e.g. low battery at 15% - low, 5% - medium, and 0% - high)
+    - Have an alert on bike connectivity, e.g. if a bike does not send data for 1 minute an alert is raised
+  - Visualization
+    - All button bug
+- Preparation for final presentation 
+  - Design documents
+    - Requirements (proposal and implemented)
+      - Extend [README](./README.md) with description of each service
+      - Extend/adjust [INTEGRATION](./INTEGRATION.md) with technical definition and specification
+    - Architecture diagram
+      - Extend with possible extensions
+    - Slideshow
+      - Describe all the services in more detail
+  - git cleanup
+    - Correct data models (I think simulation and influxdb use different models)
+      - Leave current state and adjust documentation
+    - Deployment instructions (maybe single docker compose with a good default)
+      - Done
+    - Remove unused files (e.g. `runSim.sh`)
+  - When are we done?
+    - Project submission 21.06.2026
+    - Exam in week 29.06 to 03.07
+
 ## 15.06.2026
 - Integration
   - How to start the simulation
