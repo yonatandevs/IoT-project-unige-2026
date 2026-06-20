@@ -219,8 +219,9 @@ class BikeSimulator extends EventEmitter {
     this.id = id
     this.state = new BikeState(id, waypoints)
     this.imuModel = new IMUModel()
-    this._scenario = scenario
-    this._tickCount = 0
+    this.scenario = scenario
+    this.tickCount = 0
+    this.fallen = false
     this.routeFinishedEmitted = false
   }
 
@@ -269,7 +270,8 @@ class BikeSimulator extends EventEmitter {
     if (
       this.state.status === "rented" &&
       this.state.locked === false &&
-      !this.state.route.isFinished
+      !this.state.route.isFinished &&
+      !this.fallen
     ) {
       const targetSpeedKmh = 14 + gaussianNoise(0, 3)
       const speedKmh = Math.min(25, Math.max(8, targetSpeedKmh))
@@ -313,15 +315,26 @@ class BikeSimulator extends EventEmitter {
     })
 
     // Increment tick counter
-    this._tickCount++
+    this.tickCount++
 
     // Scenario injection
-    if (this._scenario === "fall" && this._tickCount === 10) {
-      console.log("[SCENARIO] Injecting fall event")
-      this.state.imu = { x: 8.5, y: 0.2, z: 1.1, dx: 0, dy: 0, dz: 0 }
+    if (this.scenario === "fall" && this.tickCount >= 10  ) {
+      if (this.tickCount === 10) {
+        console.log("[SCENARIO] Injecting fall event")
+        this.fallen = true
+      }
+      this.state.current_speed = 0
+      this.state.imu = {
+        x: gaussianNoise(8.5, 0.1),
+        y: gaussianNoise(0.2, 0.05),
+        z: gaussianNoise(1.1, 0.1),
+        dx: gaussianNoise(0, 0.02),
+        dy: gaussianNoise(0, 0.02),
+        dz: gaussianNoise(0, 0.02),
+      }
     }
 
-    if (this._scenario === "low_battery" && this._tickCount === 1) {
+    if (this.scenario === "low_battery" && this.tickCount === 1) {
       console.log("[SCENARIO] Injecting low battery")
       this.state.battery = 15
     }
