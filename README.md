@@ -63,5 +63,8 @@ It should be carefully decided which data is relevant to see at the first glance
 
 Additional to the data visualization, the dashboard could also become a control panel for operators.
 This could include locking or unlocking a bike from the application, changing the restriced/allowed parking zones and automatically notifying an employee about necessary bike maintenance.
+This architecture is visualized in the image below.
+
+![Extended Architecture](./images/architecture_extended.png)
 
 A more technical description can be found in [INTEGRATION.md](./INTEGRATION.md#dashboard)
