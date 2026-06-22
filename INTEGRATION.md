@@ -139,7 +139,7 @@ Five flows process the incoming telemetry:
 
 ## InfluxDB Measurements
 
-### `bike` — All bike telemetry (matches `models/bike.ts`)
+### `bike` — All bike telemetry (matches [models/bike.ts](shared/models/bike.ts)
 
 The single `bike/+/telemetry` MQTT topic feeds into this measurement.
 Flow A extracts nested fields and flattens them:
@@ -172,7 +172,7 @@ from(bucket: "bike_data")
 
 ---
 
-### `alert` — All generated alerts (matches `models/alert.ts`)
+### `alert` — All generated alerts (matches [models/alert.ts](shared/models/alert.ts))
 
 Tags: `bike_id`, `type`, `severity`
 Fields: `alert_id`, `message`
@@ -222,12 +222,12 @@ from(bucket: "bike_data")
 
 ## Alert Types
 
-| `type`              | `severity`              | Trigger condition                                                                 |
-|---------------------|-------------------------|-----------------------------------------------------------------------------------|
-| `fall`              | `high`                  | `status === "rented"` AND (`|z - 9.8| > 4.0` OR `sqrt(x²+y²+z²) > 25`)          |
-| `parking_violation` | `medium`                | `current_speed < 1` AND outside all authorized parking zones                      |
-| `low_battery`       | `low` / `medium` / `high` | `battery ≤ 15%` (low) / `≤ 5%` (medium) / `≤ 0%` (high); fires on tier change |
-| `connectivity`      | `medium`                | No telemetry received for > 60 seconds; auto-clears when bike comes back online   |
+| `type`              | `severity`              | Trigger condition                                                              |
+|---------------------|-------------------------|--------------------------------------------------------------------------------|
+| `fall`              | `high`                  | `status === "rented"` AND (`\|z - 9.8\| > 4.0` OR `sqrt(x²+y²+z²) > 25`)       |
+| `parking_violation` | `medium`                | `current_speed < 1` AND outside all authorized parking zones                     |
+| `low_battery`       | `low` / `medium` / `high` | `battery ≤ 15%` (low) / `≤ 5%` (medium) / `≤ 0%` (high); fires on tier change  |
+| `connectivity`      | `medium`                | No telemetry received for > 60 seconds; auto-clears when bike comes back online |
 
 **De-duplication:** Each alert type uses flow-scoped state to ensure only one active alert
 per bike. A new alert is only created when the condition first triggers (or when severity
