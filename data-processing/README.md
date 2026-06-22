@@ -35,13 +35,11 @@ docker compose up -d --build
 
 ## MQTT topics
 
-Each bike sends a single telemetry message every ~5 seconds:
+Each bike sends a single telemetry message every ~2 seconds (configurable via `TICK_MS`):
 
 | Topic | Payload |
 |---|---|
 | `bike/{id}/telemetry` | `{ id, position: {lat, lng}, current_speed, imu: {x,y,z,dx,dy,dz}, battery, locked, status, current_ride, timestamp, rssi }` |
-| `station/{id}/status` | `{ available_slots, bikes_docked }` |
-| `station/{id}/event` | dock/undock events (not processed yet) |
 
 ## Node-RED flows
 
@@ -49,10 +47,11 @@ Flows are in `node-red/data/flows.json` and editable at http://localhost:1880.
 
 | Flow | What it does |
 |---|---|
-| A — Ingest & Store | Subscribes to `bike/+/telemetry` and `station/+/status`, writes to InfluxDB |
-| B — Fall Detection | Fires a `fall` alert when `\|imu_z\| > 25 m/s²` (~2.5g spike) |
-| C — Parking Violation | Fires a `parking_violation` alert when a bike stops outside authorized zones |
-| D — Battery & Dock | Fires a `low_battery` alert when battery drops below 15% |
+| A — Ingest & Store | Subscribes to `bike/+/telemetry`, writes `bike` measurement to InfluxDB, tracks `bikeLastSeen` |
+| B — Fall Detection | Fires a `fall` alert when tilt deviates from gravity (`\|z - 9.8\| > 4.0`) or total acceleration exceeds 25 m/s²; only when rented |
+| C — Parking Violation | Fires a `parking_violation` alert when a locked bike is outside all authorized zones |
+| D — Battery Alerts | Fires a `low_battery` alert with tiered severity: ≤15% (low), ≤5% (medium), ≤0% (high) |
+| E — Connectivity Monitoring | Every 15s, checks if any bike has been silent for >60s; fires a `connectivity` alert |
 
 ## Alerts
 
@@ -60,9 +59,10 @@ Alerts are append-only events in InfluxDB — we never update them.
 
 | Type | Severity | When it fires |
 |---|---|---|
-| `fall` | high | `\|imu_z\| > 25 m/s²` — sudden vertical impact |
-| `parking_violation` | medium | `current_speed < 1` and bike is outside all parking zones |
-| `low_battery` | low | `battery < 15%` |
+| `fall` | high | `\|z - 9.8\| > 4.0` OR `sqrt(x²+y²+z²) > 25`; only when `status === "rented"` |
+| `parking_violation` | medium | `locked === true` and bike is outside all parking zones |
+| `low_battery` | low / medium / high | `battery ≤ 15%` (low), `≤ 5%` (medium), `≤ 0%` (high); fires on severity tier change |
+| `connectivity` | medium | No telemetry for > 60 seconds; auto-clears when bike comes back online |
 
 Each alert is written as:
 
@@ -75,12 +75,12 @@ fields:      { alert_id, message }
 **Acknowledging alerts:** instead of updating the original point (bad practice in time-series DBs), we write a separate event:
 
 ```
-measurement: alert_acknowledged
-tags:        { alert_id }
-fields:      { acknowledged_by, note }
+measurement: alert_ack
+tags:        { bike_id, alert_id }
+fields:      { acked, source }
 ```
 
-To check if an alert was acknowledged, look for a matching `alert_id` in `alert_acknowledged`.
+To check if an alert was acknowledged, look for a matching `alert_id` in `alert_ack`.
 
 ## Parking zones
 
@@ -118,8 +118,7 @@ Bucket: `bike_data`, org: `iot-bikes`.
 |---|---|---|
 | `bike` | `id` | `lat`, `lng`, `current_speed`, `imu_x/y/z`, `imu_dx/dy/dz`, `battery`, `locked`, `status`, `current_ride` |
 | `alert` | `bike_id`, `type`, `severity` | `alert_id`, `message` |
-| `alert_acknowledged` | `alert_id` | `acknowledged_by`, `note` |
-| `station` | `station_id` | `available_slots`, `bikes_docked` |
+| `alert_ack` | `bike_id`, `alert_id` | `acked`, `source` |
 
 ## Useful commands
 

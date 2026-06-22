@@ -117,7 +117,7 @@ Five flows process the incoming telemetry:
 |------|-----------------------------|------------------------|-----------------------------------------------|
 | A    | Ingest & Store              | `bike/+/telemetry`     | Writes `bike` measurement; updates `bikeLastSeen` |
 | B    | Fall Detection              | `bike/+/telemetry`     | Detects falls; writes `alert` (type=`fall`)   |
-| C    | Parking Violation           | `bike/+/telemetry`     | Detects illegal parking; writes `alert`       |
+| C    | Parking Violation           | `bike/+/telemetry`     | Detects locked bikes outside zones; writes `alert` |
 | D    | Battery Alerts              | `bike/+/telemetry`     | Tiered low-battery alerts; writes `alert`     |
 | E    | Connectivity Monitoring     | *(timer, no MQTT)*     | Every 15s, checks bikes silent > 60s          |
 
@@ -225,7 +225,7 @@ from(bucket: "bike_data")
 | `type`              | `severity`              | Trigger condition                                                                 |
 |---------------------|-------------------------|-----------------------------------------------------------------------------------|
 | `fall`              | `high`                  | `status === "rented"` AND (`|z - 9.8| > 4.0` OR `sqrt(x²+y²+z²) > 25`)          |
-| `parking_violation` | `medium`                | `current_speed < 1` AND outside all authorized parking zones                      |
+| `parking_violation` | `medium`                | `locked === true` AND outside all authorized parking zones                        |
 | `low_battery`       | `low` / `medium` / `high` | `battery ≤ 15%` (low) / `≤ 5%` (medium) / `≤ 0%` (high); fires on tier change |
 | `connectivity`      | `medium`                | No telemetry received for > 60 seconds; auto-clears when bike comes back online   |
 
@@ -332,7 +332,7 @@ mosquitto_pub -h localhost -t "bike/bike-ge-002/telemetry" -m '{
   "rssi": -55
 }'
 
-# Triggers PARKING VIOLATION — speed=0, outside all zones (44.42, 8.96)
+# Triggers PARKING VIOLATION — locked outside all zones (44.42, 8.96)
 mosquitto_pub -h localhost -t "bike/bike-ge-003/telemetry" -m '{
   "id": "bike-ge-003",
   "position": { "lat": 44.4200, "lng": 8.9600 },
@@ -455,8 +455,8 @@ mosquitto_pub -h localhost -t "bike/bike-ge-003/telemetry" -m '{
 }'
 ```
 
-This location (44.42, 8.96) is outside all authorized parking zones, so the
-parking violation flow should fire.
+This bike is `locked` and at location (44.42, 8.96) which is outside all
+authorized parking zones, so the parking violation flow should fire.
 
 ### 8. Verify on the dashboard
 
