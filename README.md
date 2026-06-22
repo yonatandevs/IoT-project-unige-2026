@@ -28,7 +28,46 @@ In the following sectinons, the components are described in more detail.
 
 ### Bike and Simulation
 
+In a real deployment, each bicycle would be equipped with the following sensors:
+
+- **GNSS receiver**  provides real-time position (latitude, longitude) and speed
+- **IMU (Inertial Measurement Unit)**  measures acceleration and orientation on 3 axes, used for fall detection
+- **Battery monitor**  tracks the state of charge of the e-bike battery
+
+The onboard device (e.g. a Raspberry Pi, ESP32, or dedicated MCU) collects data from these sensors and publishes it to the MQTT broker over a mobile network (4G/LTE or NB-IoT for low power). Each bike publishes to the topic `bike/{bike_id}/telemetry` every 2 seconds while active.
+
+Since physical bikes are not available for this prototype, a software simulator replaces the edge devices. The simulator is a Node.js application that models 5 bikes riding real routes in Genoa fetched from OSRM. It simulates sensor behavior including:
+
+- GPS movement along real road routes
+- IMU readings with Gaussian noise based on speed
+- Battery drain proportional to distance traveled
+- RSSI-based packet loss and network latency per urban zone
+
+On startup, the simulator seeds 30 days of historical data into InfluxDB before starting the live simulation. Each bike has a different usage profile to simulate realistic fleet diversity.
+
+The simulator supports injectable scenarios for testing and demonstration:
+
+| Scenario      | Description                                                                 |
+|---------------|-----------------------------------------------------------------------------|
+| `normal`      | Standard simulation    bike rides routes around Genoa normally               |
+| `fall`        | At tick 10, bike falls and stays on the ground permanently                  |
+| `low_battery` | Battery forced to 15% at tick 1 triggers low battery alert immediately    |
+
+A more technical description can be found in [INTEGRATION.md](./INTEGRATION.md#simulation).
+
 ### Data Processing
+
+Data processing is handled by Node-RED, which subscribes to the MQTT broker and runs 5 independent flows:
+
+- **Flow A    Ingest & Store**    receives all telemetry and writes it to InfluxDB
+- **Flow B    Fall Detection**    detects falls based on IMU values when the bike is rented
+- **Flow C    Parking Violation**    detects bikes parked outside authorized zones
+- **Flow D    Battery Alerts**    monitors battery level with 3 severity tiers (low, medium, high)
+- **Flow E    Connectivity Monitoring**    detects bikes that have not sent data for more than 60 seconds
+
+All alerts are written to InfluxDB and displayed in the dashboard in real time.
+
+A more technical description can be found in [INTEGRATION.md](./INTEGRATION.md#node-red-flows).
 
 ### Data Visualization and Controls
 
@@ -63,5 +102,8 @@ It should be carefully decided which data is relevant to see at the first glance
 
 Additional to the data visualization, the dashboard could also become a control panel for operators.
 This could include locking or unlocking a bike from the application, changing the restriced/allowed parking zones and automatically notifying an employee about necessary bike maintenance.
+This architecture is visualized in the image below.
+
+![Extended Architecture](./images/architecture_extended.png)
 
 A more technical description can be found in [INTEGRATION.md](./INTEGRATION.md#dashboard)

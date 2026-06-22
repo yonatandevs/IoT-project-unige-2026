@@ -4,26 +4,44 @@
         {
             "zone_id": "zone-porto-antico",
             "name": "Porto Antico",
-            "center": { "lat": 44.4095, "lng": 8.9290 },
+            "center": { "lat": 44.40904, "lng": 8.92861 },
             "radius": 300
         },
         {
             "zone_id": "zone-de-ferrari",
             "name": "Piazza De Ferrari",
-            "center": { "lat": 44.4072, "lng": 8.9345 },
+            "center": { "lat": 44.40737, "lng": 8.93394 },
             "radius": 200
         },
         {
             "zone_id": "zone-brignole",
             "name": "Stazione Brignole",
-            "center": { "lat": 44.4153, "lng": 8.9425 },
+            "center": { "lat": 44.40733, "lng": 8.94575 },
             "radius": 250
         },
         {
             "zone_id": "zone-principe",
             "name": "Stazione Principe",
-            "center": { "lat": 44.4103, "lng": 8.9213 },
+            "center": { "lat": 44.41655, "lng": 8.92193 },
             "radius": 250
+        },
+        {
+            "zone_id": "zone-sampierdarena",
+            "name": "Stazione Sampierdarena",
+            "center": { "lat": 44.41318, "lng": 8.88739 },
+            "radius": 200
+        },
+        {
+            "zone_id": "zone-mercato-orientale",
+            "name": "Mercato Orientale",
+            "center": { "lat": 44.40579, "lng": 8.94201 },
+            "radius": 150
+        },
+        {
+            "zone_id": "zone-castelletto",
+            "name": "Castelletto",
+            "center": { "lat": 44.41342, "lng": 8.93305 },
+            "radius": 200
         }
     ]
 }
