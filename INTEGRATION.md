@@ -9,26 +9,36 @@ and how to test it all.
 ## Architecture Overview
 
 ```
-Edge Devices                Data Processing (Docker)              Dashboard
-────────────                ────────────────────────              ─────────
+Edge / Simulator            Data Processing (Docker)              Dashboard
+────────────────            ────────────────────────              ─────────
                                ┌──────────────┐
-  Bike Node  ── MQTT pub ──>  │  Mosquitto    │
-  Station Node ── MQTT pub ->  │  :1883        │
+  Bike Simulator ─ MQTT pub ─> │  Mosquitto    │
+  (Node.js)                    │  :1883        │
                                └──────┬───────┘
                                       │ subscribe
                                       ▼
                                ┌──────────────┐
                                │  Node-RED     │
                                │  :1880        │
-                               │  (4 flows)    │
+                               │  (5 flows)    │
                                └──────┬───────┘
                                       │ write
                                       ▼
                                ┌──────────────┐
-                               │  InfluxDB 2   │ <── query ── Dashboard
-                               │  :8086        │
-                               └──────────────┘
+                               │  InfluxDB 2   │ <── query ── React Dashboard
+                               │  :8086        │ <── write ── (alert acks)
+                               └──────────────┘              :80 (nginx)
 ```
+
+### Docker Services (root `docker-compose.yml`)
+
+| Service          | Container        | Host Port | Purpose                      |
+|------------------|------------------|-----------|------------------------------|
+| `mosquitto`      | `iot-mosquitto`  | 1883      | MQTT broker                  |
+| `influxdb`       | `iot-influxdb`   | 8086      | Time-series database         |
+| `node-red`       | `iot-node-red`   | 1880      | Stream processing + alerts   |
+| `frontend`       | `iot-frontend`   | 80        | React dashboard (nginx)      |
+| `bike-simulator` | `iot-simulator`  | —         | Live bike simulation + seed  |
 
 ---
 
@@ -39,146 +49,77 @@ Edge Devices                Data Processing (Docker)              Dashboard
 | Broker     | `mqtt://localhost:1883`        |
 | Protocol   | MQTT v3.1.1 or v5             |
 | Auth       | None (anonymous allowed)       |
-| QoS        | 0 for telemetry, 1 for alarms |
+| QoS        | 0 for telemetry, 1 on shutdown |
 
 ---
 
-## MQTT Topics — Bikes
+## MQTT Topic — Bikes
 
-Each bike publishes on **three separate topics**. The `{bike_id}` in the topic
-must match the value used everywhere else (e.g. `bike-001`).
+Each bike publishes **all telemetry on a single unified topic**.
+The `{bike_id}` follows the format `bike-ge-XXX` (e.g. `bike-ge-001`).
 
-All three topics write to a **single InfluxDB measurement `bike`** (matching `models/bike.ts`).
+### `bike/{bike_id}/telemetry`
 
-### `bike/{bike_id}/gps`
-
-Published once per tick (every 1-2 seconds while riding, every 5-10 seconds while parked).
-
-```json
-{
-  "lat": 44.40560,
-  "lng": 8.94630,
-  "current_speed": 12.3
-}
-```
-
-| Field           | Type   | Unit           | Notes                              |
-|-----------------|--------|----------------|------------------------------------|
-| `lat`           | float  | degrees WGS-84 | Decimal degrees, 5-6 decimal places|
-| `lng`           | float  | degrees WGS-84 | Decimal degrees, 5-6 decimal places|
-| `current_speed` | float  | km/h           | 0 when parked                      |
-
----
-
-### `bike/{bike_id}/imu`
-
-Published once per tick. Consumed by the fall detection flow.
+Published once per tick (every `TICK_MS` milliseconds, default 2000ms).
+Consumed by all five Node-RED flows.
 
 ```json
 {
-  "x": 0.12,
-  "y": -0.05,
-  "z": 9.81,
-  "dx": 0.003,
-  "dy": -0.001,
-  "dz": 0.015
-}
-```
-
-| Field | Type  | Unit   | Notes                                          |
-|-------|-------|--------|-------------------------------------------------|
-| `x`   | float | m/s²   | Longitudinal acceleration (forward positive)   |
-| `y`   | float | m/s²   | Lateral acceleration (left positive)           |
-| `z`   | float | m/s²   | Vertical acceleration (up positive, ~9.81 static) |
-| `dx`  | float | rad/s  | Roll rate                                      |
-| `dy`  | float | rad/s  | Pitch rate                                     |
-| `dz`  | float | rad/s  | Yaw rate                                       |
-
-**Fall detection triggers when `|z| > 25 m/s²`.**
-
----
-
-### `bike/{bike_id}/status`
-
-Published once per tick. Consumed by the battery alert flow.
-
-```json
-{
+  "id": "bike-ge-001",
+  "position": {
+    "lat": 44.40560,
+    "lng": 8.94630
+  },
+  "current_speed": 12.3,
+  "imu": {
+    "x": 0.12,
+    "y": -0.05,
+    "z": 9.81,
+    "dx": 0.003,
+    "dy": -0.001,
+    "dz": 0.015
+  },
   "battery": 73.5,
-  "locked": true,
+  "locked": false,
   "status": "rented",
-  "current_ride": "ride-001"
+  "current_ride": "ride-xxxxxxxx",
+  "timestamp": "2026-06-22T09:15:00.000Z",
+  "rssi": -65
 }
 ```
 
-| Field          | Type    | Values                                    | Notes                        |
-|----------------|---------|-------------------------------------------|------------------------------|
-| `battery`      | float   | 0-100                                     | Alert triggers when < 15     |
-| `locked`       | boolean | `true` / `false`                          |                              |
-| `status`       | string  | `"available"` / `"rented"` / `"broken"`   |                              |
-| `current_ride` | string  | ride ID or `""`                           | Empty when not rented        |
+| Field                | Type    | Unit / Values                           | Notes                                      |
+|----------------------|---------|-----------------------------------------|--------------------------------------------|
+| `id`                 | string  | `bike-ge-XXX`                           | Bike identifier                            |
+| `position.lat`       | float   | degrees WGS-84                          | Decimal degrees, 5-6 decimal places        |
+| `position.lng`       | float   | degrees WGS-84                          | Decimal degrees, 5-6 decimal places        |
+| `current_speed`      | float   | km/h                                    | 0 when parked                              |
+| `imu.x`              | float   | m/s²                                    | Longitudinal acceleration                  |
+| `imu.y`              | float   | m/s²                                    | Lateral acceleration                       |
+| `imu.z`              | float   | m/s²                                    | Vertical acceleration (~9.8 static)        |
+| `imu.dx`             | float   | m/s² delta                              | Change in x since last tick                |
+| `imu.dy`             | float   | m/s² delta                              | Change in y since last tick                |
+| `imu.dz`             | float   | m/s² delta                              | Change in z since last tick                |
+| `battery`            | float   | 0-100                                   | Percentage                                 |
+| `locked`             | boolean | `true` / `false`                        |                                            |
+| `status`             | string  | `"available"` / `"rented"` / `"broken"` |                                            |
+| `current_ride`       | string  | ride UUID or `""`                       | Empty when not rented                      |
+| `timestamp`          | string  | ISO 8601                                | When the reading was taken                 |
+| `rssi`               | integer | dBm                                     | Simulated signal strength (affects packet loss) |
 
 ---
 
-### `bike/{bike_id}/cmd` (subscribe direction)
+## Node-RED Flows
 
-Bikes **subscribe** to this topic to receive operator commands.
-Not consumed by the data processing layer — goes directly to the bike.
+Five flows process the incoming telemetry:
 
-```json
-{
-  "command_type": "lock"
-}
-```
-
-| Field          | Type   | Values                                          |
-|----------------|--------|-------------------------------------------------|
-| `command_type` | string | `"lock"`, `"unlock"`, `"alarm_on"`, `"alarm_off"` |
-
----
-
-## MQTT Topics — Docking Stations
-
-### `station/{station_id}/status`
-
-Published on every slot change or every 10 seconds as heartbeat.
-
-```json
-{
-  "available_slots": 3,
-  "bikes_docked": 2
-}
-```
-
-| Field             | Type     | Notes                                  |
-|-------------------|----------|----------------------------------------|
-| `available_slots` | integer  | Number of free slots                   |
-| `bikes_docked`    | integer  | Number of occupied slots               |
-
----
-
-### `station/{station_id}/event`
-
-Published when a bike docks or undocks.
-
-```json
-{
-  "event": "dock",
-  "bike_id": "bike-001",
-  "slot_index": 2,
-  "timestamp": "2026-06-01T14:30:00Z"
-}
-```
-
-| Field        | Type    | Values              | Notes                     |
-|--------------|---------|---------------------|---------------------------|
-| `event`      | string  | `"dock"` / `"undock"` |                          |
-| `bike_id`    | string  |                     | Which bike                |
-| `slot_index` | integer |                     | Zero-based slot number    |
-| `timestamp`  | string  | ISO 8601            |                           |
-
-> Note: The dock event flow is wired in Node-RED but not fully processing yet.
-> It currently logs events to the debug console.
+| Flow | Label                       | MQTT Subscription      | Purpose                                       |
+|------|-----------------------------|------------------------|-----------------------------------------------|
+| A    | Ingest & Store              | `bike/+/telemetry`     | Writes `bike` measurement; updates `bikeLastSeen` |
+| B    | Fall Detection              | `bike/+/telemetry`     | Detects falls; writes `alert` (type=`fall`)   |
+| C    | Parking Violation           | `bike/+/telemetry`     | Detects illegal parking; writes `alert`       |
+| D    | Battery Alerts              | `bike/+/telemetry`     | Tiered low-battery alerts; writes `alert`     |
+| E    | Connectivity Monitoring     | *(timer, no MQTT)*     | Every 15s, checks bikes silent > 60s          |
 
 ---
 
@@ -200,21 +141,32 @@ Published when a bike docks or undocks.
 
 ### `bike` — All bike telemetry (matches `models/bike.ts`)
 
-Three MQTT topics feed into this single measurement:
+The single `bike/+/telemetry` MQTT topic feeds into this measurement.
+Flow A extracts nested fields and flattens them:
 
-| MQTT Topic          | Fields written                                             |
-|---------------------|------------------------------------------------------------|
-| `bike/+/gps`       | `lat`, `lng`, `current_speed`                              |
-| `bike/+/imu`       | `imu_x`, `imu_y`, `imu_z`, `imu_dx`, `imu_dy`, `imu_dz`  |
-| `bike/+/status`    | `battery`, `locked`, `status`, `current_ride`              |
+| Payload Path         | InfluxDB Field   |
+|----------------------|------------------|
+| `position.lat`       | `lat`            |
+| `position.lng`       | `lng`            |
+| `current_speed`      | `current_speed`  |
+| `imu.x`              | `imu_x`          |
+| `imu.y`              | `imu_y`          |
+| `imu.z`              | `imu_z`          |
+| `imu.dx`             | `imu_dx`         |
+| `imu.dy`             | `imu_dy`         |
+| `imu.dz`             | `imu_dz`         |
+| `battery`            | `battery`        |
+| `locked`             | `locked`         |
+| `status`             | `status`         |
+| `current_ride`       | `current_ride`   |
 
-Tags: `id` (bike_id)
+Tags: `id` (bike_id, extracted from topic)
 
 ```flux
 from(bucket: "bike_data")
   |> range(start: -1h)
   |> filter(fn: (r) => r._measurement == "bike")
-  |> filter(fn: (r) => r.id == "bike-001")
+  |> filter(fn: (r) => r.id == "bike-ge-001")
   |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
 ```
 
@@ -223,7 +175,10 @@ from(bucket: "bike_data")
 ### `alert` — All generated alerts (matches `models/alert.ts`)
 
 Tags: `bike_id`, `type`, `severity`
-Fields: `alert_id`, `message`, `acknowledged`
+Fields: `alert_id`, `message`
+
+> Note: `acknowledged` is **not** stored in this measurement.
+> Acknowledgments are tracked separately in the `alert_ack` measurement.
 
 ```flux
 from(bucket: "bike_data")
@@ -243,21 +198,23 @@ from(bucket: "bike_data")
 
 Example result:
 
-| _time                | bike_id  | type | severity | alert_id                       | message                              | acknowledged |
-|----------------------|----------|------|----------|--------------------------------|--------------------------------------|--------------|
-| 2026-06-01T14:35:00Z | bike-001 | fall | high     | fall-bike-001-1748789700000    | Fall detected: \|z\| = 28.50 m/s²   | false        |
+| _time                | bike_id      | type | severity | alert_id                           | message                                                |
+|----------------------|--------------|------|----------|------------------------------------|--------------------------------------------------------|
+| 2026-06-01T14:35:00Z | bike-ge-001 | fall | high     | fall-bike-ge-001-1748789700000     | Fall detected: tilt=5.2, total_acc=26.30 m/s2          |
 
 ---
 
-### `station` — Docking station availability (extensible)
+### `alert_ack` — Alert acknowledgments (written by dashboard)
 
-Tags: `station_id`
-Fields: `available_slots`, `bikes_docked`
+Tags: `bike_id`, `alert_id`
+Fields: `acked` (boolean), `source` (string)
+
+Written by the React dashboard when an operator acknowledges an alert.
 
 ```flux
 from(bucket: "bike_data")
-  |> range(start: -1h)
-  |> filter(fn: (r) => r._measurement == "station")
+  |> range(start: -24h)
+  |> filter(fn: (r) => r._measurement == "alert_ack")
   |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
 ```
 
@@ -265,18 +222,23 @@ from(bucket: "bike_data")
 
 ## Alert Types
 
-| `type`              | `severity` | Trigger condition                      |
-|---------------------|------------|----------------------------------------|
-| `fall`              | `high`     | `|z| > 25 m/s²`                        |
-| `parking_violation` | `medium`   | `current_speed < 1` AND outside all zones |
-| `low_battery`       | `low`      | `battery < 15%`                        |
+| `type`              | `severity`              | Trigger condition                                                                 |
+|---------------------|-------------------------|-----------------------------------------------------------------------------------|
+| `fall`              | `high`                  | `status === "rented"` AND (`|z - 9.8| > 4.0` OR `sqrt(x²+y²+z²) > 25`)          |
+| `parking_violation` | `medium`                | `current_speed < 1` AND outside all authorized parking zones                      |
+| `low_battery`       | `low` / `medium` / `high` | `battery ≤ 15%` (low) / `≤ 5%` (medium) / `≤ 0%` (high); fires on tier change |
+| `connectivity`      | `medium`                | No telemetry received for > 60 seconds; auto-clears when bike comes back online   |
+
+**De-duplication:** Each alert type uses flow-scoped state to ensure only one active alert
+per bike. A new alert is only created when the condition first triggers (or when severity
+changes for `low_battery`). Alerts clear automatically when the condition resolves.
 
 ---
 
 ## Authorized Parking Zones
 
-Hardcoded in Node-RED Flow C. To add new zones, update the function node
-in the Node-RED editor (http://localhost:1880).
+Loaded from `/shared/parking-zones.json` at Node-RED startup (Flow C).
+To add or modify zones, edit `shared/parking-zones.json` — changes take effect on restart.
 
 | Zone                | Latitude  | Longitude | Radius (m) |
 |---------------------|-----------|-----------|------------|
@@ -289,68 +251,99 @@ in the Node-RED editor (http://localhost:1880).
 
 ## Dashboard
 
-The dashboard connects to the influxdb on port 8086.
-It fetches bike measurements, alerts, and alert acknowledgments according to the type definition in [types](./visualization/src/types.ts).
-New acknowledgments are written back to the influxdb for persistence.
+The React dashboard connects to InfluxDB on port 8086 (via nginx proxy at `/influx`).
+It fetches bike measurements, alerts, and alert acknowledgments according to the
+type definitions in [types](./visualization/src/types.ts).
 
-To start the dashboard directly (without docker) run the following commands:
+New acknowledgments are written back to InfluxDB as `alert_ack` measurements.
+New alerts are surfaced as real-time toast notifications (5-second polling interval).
+
+**Production (Docker):** http://localhost:80
+
+**Development (without Docker):**
 ```shell
 cd ./visualization
 npm install
 npm run dev
 ```
-The system will be available on [http://localhost:5173](http://localhost:5173)
-
+Available at http://localhost:5173
 
 ---
 
 ## Manual Testing with mosquitto_pub
 
-Start the Docker stack first (`cd data-processing && docker compose up -d`),
+Start the Docker stack first (`docker compose up -d` from the repo root),
 then publish test messages from any terminal.
 
 ```bash
-# GPS data
-mosquitto_pub -h localhost -t "bike/bike-001/gps" -m '{
-  "lat": 44.4056, "lng": 8.9463, "current_speed": 12.3
+# Normal telemetry (no alerts triggered)
+mosquitto_pub -h localhost -t "bike/bike-ge-001/telemetry" -m '{
+  "id": "bike-ge-001",
+  "position": { "lat": 44.4056, "lng": 8.9463 },
+  "current_speed": 12.3,
+  "imu": { "x": 0.12, "y": -0.05, "z": 9.81, "dx": 0.003, "dy": -0.001, "dz": 0.015 },
+  "battery": 73.5,
+  "locked": false,
+  "status": "rented",
+  "current_ride": "ride-042",
+  "timestamp": "2026-06-22T09:00:00Z",
+  "rssi": -60
 }'
 
-# IMU data (normal — no alert)
-mosquitto_pub -h localhost -t "bike/bike-001/imu" -m '{
-  "x": 0.12, "y": -0.05, "z": 9.81,
-  "dx": 0.003, "dy": -0.001, "dz": 0.015
+# Triggers FALL ALERT — tilt from gravity > 4.0 (z=1.1, |1.1-9.8|=8.7)
+mosquitto_pub -h localhost -t "bike/bike-ge-001/telemetry" -m '{
+  "id": "bike-ge-001",
+  "position": { "lat": 44.4056, "lng": 8.9463 },
+  "current_speed": 5.0,
+  "imu": { "x": 8.5, "y": 0.2, "z": 1.1, "dx": 0, "dy": 0, "dz": 0 },
+  "battery": 65.0,
+  "locked": false,
+  "status": "rented",
+  "current_ride": "ride-042",
+  "timestamp": "2026-06-22T09:01:00Z",
+  "rssi": -60
 }'
 
-# IMU data (triggers FALL ALERT — |z| > 25)
-mosquitto_pub -h localhost -t "bike/bike-001/imu" -m '{
-  "x": 3.5, "y": 1.2, "z": 28.5,
-  "dx": 0.8, "dy": 0.3, "dz": 0.1
+# Triggers LOW BATTERY ALERT (severity: low, battery ≤ 15)
+mosquitto_pub -h localhost -t "bike/bike-ge-001/telemetry" -m '{
+  "id": "bike-ge-001",
+  "position": { "lat": 44.4095, "lng": 8.9290 },
+  "current_speed": 0,
+  "imu": { "x": 0.01, "y": -0.02, "z": 9.79, "dx": 0, "dy": 0, "dz": 0 },
+  "battery": 12.0,
+  "locked": true,
+  "status": "available",
+  "current_ride": "",
+  "timestamp": "2026-06-22T09:02:00Z",
+  "rssi": -55
 }'
 
-# Status (triggers LOW BATTERY ALERT — battery < 15)
-mosquitto_pub -h localhost -t "bike/bike-001/telemetry" -m '{
-  "battery": 8.2, "locked": false, "status": "rented", "current_ride": "ride-042"
+# Triggers CRITICAL BATTERY ALERT (severity: high, battery ≤ 0)
+mosquitto_pub -h localhost -t "bike/bike-ge-002/telemetry" -m '{
+  "id": "bike-ge-002",
+  "position": { "lat": 44.4095, "lng": 8.9290 },
+  "current_speed": 0,
+  "imu": { "x": 0, "y": 0, "z": 9.8, "dx": 0, "dy": 0, "dz": 0 },
+  "battery": 0,
+  "locked": true,
+  "status": "available",
+  "current_ride": "",
+  "timestamp": "2026-06-22T09:03:00Z",
+  "rssi": -55
 }'
 
-# Status (normal — no alert)
-mosquitto_pub -h localhost -t "bike/bike-001/status" -m '{
-  "battery": 73.5, "locked": true, "status": "available", "current_ride": ""
-}'
-
-# GPS (triggers PARKING VIOLATION — current_speed=0, outside all zones)
-mosquitto_pub -h localhost -t "bike/bike-002/gps" -m '{
-  "lat": 44.4200, "lng": 8.9600, "current_speed": 0
-}'
-
-# Station status
-mosquitto_pub -h localhost -t "station/station-001/status" -m '{
-  "available_slots": 3, "bikes_docked": 2
-}'
-
-# Station dock event
-mosquitto_pub -h localhost -t "station/station-001/event" -m '{
-  "event": "dock", "bike_id": "bike-001", "slot_index": 2,
-  "timestamp": "2026-06-01T14:30:00Z"
+# Triggers PARKING VIOLATION — speed=0, outside all zones (44.42, 8.96)
+mosquitto_pub -h localhost -t "bike/bike-ge-003/telemetry" -m '{
+  "id": "bike-ge-003",
+  "position": { "lat": 44.4200, "lng": 8.9600 },
+  "current_speed": 0,
+  "imu": { "x": 0, "y": 0, "z": 9.8, "dx": 0, "dy": 0, "dz": 0 },
+  "battery": 50.0,
+  "locked": true,
+  "status": "available",
+  "current_ride": "",
+  "timestamp": "2026-06-22T09:04:00Z",
+  "rssi": -70
 }'
 ```
 
@@ -361,17 +354,26 @@ mosquitto_pub -h localhost -t "station/station-001/event" -m '{
 ### 1. Start the stack
 
 ```bash
-cd data-processing
 docker compose up -d
 ```
 
 Wait ~30 seconds for all services to initialize.
+The simulator will seed 7 days of historical data, then start publishing live.
 
-### 2. Publish a GPS reading
+### 2. Publish a telemetry reading
 
 ```bash
-mosquitto_pub -h localhost -t "bike/bike-001/gps" -m '{
-  "lat": 44.4056, "lng": 8.9463, "current_speed": 14.2
+mosquitto_pub -h localhost -t "bike/bike-ge-001/telemetry" -m '{
+  "id": "bike-ge-001",
+  "position": { "lat": 44.4056, "lng": 8.9463 },
+  "current_speed": 14.2,
+  "imu": { "x": 0.1, "y": 0.05, "z": 9.78, "dx": 0, "dy": 0, "dz": 0 },
+  "battery": 80.0,
+  "locked": false,
+  "status": "rented",
+  "current_ride": "ride-test-001",
+  "timestamp": "2026-06-22T10:00:00Z",
+  "rssi": -62
 }'
 ```
 
@@ -391,9 +393,17 @@ from(bucket: "bike_data")
 ### 4. Trigger a fall alert
 
 ```bash
-mosquitto_pub -h localhost -t "bike/bike-001/imu" -m '{
-  "x": 3.5, "y": 1.2, "z": 28.5,
-  "dx": 0.8, "dy": 0.3, "dz": 0.1
+mosquitto_pub -h localhost -t "bike/bike-ge-001/telemetry" -m '{
+  "id": "bike-ge-001",
+  "position": { "lat": 44.4056, "lng": 8.9463 },
+  "current_speed": 5.0,
+  "imu": { "x": 8.5, "y": 0.2, "z": 1.1, "dx": 0, "dy": 0, "dz": 0 },
+  "battery": 65.0,
+  "locked": false,
+  "status": "rented",
+  "current_ride": "ride-test-001",
+  "timestamp": "2026-06-22T10:01:00Z",
+  "rssi": -60
 }'
 ```
 
@@ -414,18 +424,41 @@ from(bucket: "bike_data")
 ### 6. Trigger a low battery alert
 
 ```bash
-mosquitto_pub -h localhost -t "bike/bike-001/status" -m '{
-  "battery": 8.2, "locked": false, "status": "rented", "current_ride": "ride-042"
+mosquitto_pub -h localhost -t "bike/bike-ge-001/telemetry" -m '{
+  "id": "bike-ge-001",
+  "position": { "lat": 44.4095, "lng": 8.9290 },
+  "current_speed": 0,
+  "imu": { "x": 0, "y": 0, "z": 9.8, "dx": 0, "dy": 0, "dz": 0 },
+  "battery": 8.2,
+  "locked": false,
+  "status": "rented",
+  "current_ride": "ride-test-001",
+  "timestamp": "2026-06-22T10:02:00Z",
+  "rssi": -55
 }'
 ```
 
 ### 7. Trigger a parking violation
 
 ```bash
-mosquitto_pub -h localhost -t "bike/bike-003/gps" -m '{
-  "lat": 44.4200, "lng": 8.9600, "current_speed": 0
+mosquitto_pub -h localhost -t "bike/bike-ge-003/telemetry" -m '{
+  "id": "bike-ge-003",
+  "position": { "lat": 44.4200, "lng": 8.9600 },
+  "current_speed": 0,
+  "imu": { "x": 0, "y": 0, "z": 9.8, "dx": 0, "dy": 0, "dz": 0 },
+  "battery": 50.0,
+  "locked": true,
+  "status": "available",
+  "current_ride": "",
+  "timestamp": "2026-06-22T10:03:00Z",
+  "rssi": -70
 }'
 ```
 
 This location (44.42, 8.96) is outside all authorized parking zones, so the
 parking violation flow should fire.
+
+### 8. Verify on the dashboard
+
+Open http://localhost:80 — alerts should appear in the alert panel
+and as toast notifications.
