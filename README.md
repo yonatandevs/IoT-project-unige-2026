@@ -1,7 +1,7 @@
 # IoT Project UNIGE 2026 – Smarter Bicycle Mobility in Genoa
 
 This is a design for a bike sharing mobility platform for the municipality of Genoa.
-The slideshow can be found [here](https://docs.google.com/presentation/d/12apYBCjeo8CgFIBna6Lill1BvOEHjzwkTz_h2BHt-9Q/edit?usp=sharing).
+The slideshow can be found [here](presentation.pdf).
 
 Docker is required to run the project.
 The following command starts all the services and the simulation:
@@ -22,9 +22,9 @@ The system consists of the following components
  - Node-RED fetches the data from the MQTT broker and detects whether certain alerts should be triggered.
  - The alerts and the initial sensor data are then persisted in the time series database [influxdb](https://www.influxdata.com).
  - A dashboard fetches all data from the database to organize and visualize it.
- - Alerts can be acknowledged in the dashboard which will create a new record in the database.
+ - Alerts can be acknowledged in the dashboard, which will create a new record in the database.
 
-In the following sectinons, the components are described in more detail.
+In the following sections, the components are described in more detail.
 
 ### Bike and Simulation
 
@@ -52,8 +52,6 @@ The simulator supports injectable scenarios for testing and demonstration:
 | `normal`      | Standard simulation    bike rides routes around Genoa normally               |
 | `fall`        | At tick 10, bike falls and stays on the ground permanently                  |
 | `low_battery` | Battery forced to 15% at tick 1 triggers low battery alert immediately    |
-
-A more technical description can be found in [INTEGRATION.md](./INTEGRATION.md#simulation).
 
 ### Data Processing
 
